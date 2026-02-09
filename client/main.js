@@ -69,15 +69,15 @@ window.addEventListener("mousemove", e => {
 
 // Chat input
 chatInput.addEventListener("keydown", e => {
-  if (e.key === "Enter" && chatInput.value.trim() !== "") {
+  if (e.key === "Enter" && chatInput.value.trim()) {
     socket.send(JSON.stringify({
-      type:"chat",
-      name: players[myId]?.name || "Player",
-      message: chatInput.value
+      type: "chat",
+      message: chatInput.value.slice(0,80)
     }));
     chatInput.value = "";
   }
 });
+
 
 // Shooting
 window.addEventListener("mousedown", () => {

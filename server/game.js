@@ -12,12 +12,14 @@ class Game {
   // Voeg speler toe
   addPlayer(id, name, color) {
     name = name.slice(0, 15);
+          const MARGIN = 100;
+
     this.players[id] = {
       id,
       name: name || "Player",
       color: color || "#4caf50",
-      x: this.randomSpawn(),
-      y: this.randomSpawn(),
+    x: MARGIN + Math.random() * (WORLD_SIZE - MARGIN*2),
+    y: MARGIN + Math.random() * (WORLD_SIZE - MARGIN*2),
       angle: 0,
       speed: 5,
       health: 100,
@@ -65,31 +67,51 @@ class Game {
   }
 
   // Move speler met WASD + mouse aiming
-  movePlayer(id, input, delta) {
-    const p = this.players[id];
-    if (!p || !p.alive) return;
+  movePlayer(id, input) {
+  const p = this.players[id];
+  if (!p || !p.alive) return;
 
-    p.angle = input.angle;
+  const speed = p.speed;
+  let vx = 0;
+  let vy = 0;
 
-    let dx = 0, dy = 0;
-    if (input.up) dy -= 1;
-    if (input.down) dy += 1;
-    if (input.left) dx -= 1;
-    if (input.right) dx += 1;
+  if (input.up) vy -= speed;
+  if (input.down) vy += speed;
+  if (input.left) vx -= speed;
+  if (input.right) vx += speed;
 
-    const len = Math.hypot(dx, dy);
-    if (len > 0) {
-      dx /= len;
-      dy /= len;
-    }
-
-    p.x += dx * p.speed * (delta / 16);
-    p.y += dy * p.speed * (delta / 16);
-
-    // Map borders
-    p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
-    p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
+  // normalize (zodat diagonaal niet sneller is)
+  const len = Math.hypot(vx, vy);
+  if (len > 0) {
+    vx = (vx / len) * speed;
+    vy = (vy / len) * speed;
   }
+
+  p.x += vx;
+  p.y += vy;
+
+  p.angle = input.angle;
+
+  // map borders
+  p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
+  p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
+}
+getAllTargets(botId) {
+  const targets = [];
+
+  for (const id in this.players) {
+    const p = this.players[id];
+    if (p.alive) targets.push(p);
+  }
+
+  for (const id in this.bots) {
+    if (id !== botId && this.bots[id].alive) {
+      targets.push(this.bots[id]);
+    }
+  }
+
+  return targets;
+}
 
   // Beweeg bots automatisch en schiet
   moveBots(delta) {
@@ -189,6 +211,38 @@ class Game {
       }
     });
   }
+  updateBot(bot) {
+  const targets = this.getAllTargets(bot.id);
+  if (targets.length === 0) return;
+
+  let closest = null;
+  let dist = Infinity;
+
+  for (const t of targets) {
+    const d = Math.hypot(t.x - bot.x, t.y - bot.y);
+    if (d < dist) {
+      dist = d;
+      closest = t;
+    }
+  }
+
+  if (!closest) return;
+
+  bot.angle = Math.atan2(closest.y - bot.y, closest.x - bot.x);
+
+  // move
+  bot.x += Math.cos(bot.angle) * bot.speed;
+  bot.y += Math.sin(bot.angle) * bot.speed;
+
+  // shoot
+  if (bot.reload <= 0) {
+    this.spawnBullet(bot);
+    bot.reload = 30;
+  } else {
+    bot.reload--;
+  }
+}
+
 }
 
 module.exports = Game;

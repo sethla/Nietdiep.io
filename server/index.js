@@ -38,11 +38,20 @@ wss.on("connection", ws => {
     if(data.type==="input") ws.input = data;
     if(data.type==="shoot") game.shoot(id);
     if(data.type==="respawn") game.respawnPlayer(id);
-    if(data.type==="chat") {
-      wss.clients.forEach(c => {
-        if(c.readyState === 1) c.send(JSON.stringify({ type:"chat", name:data.name, message:data.message }));
-      });
-    }
+    if (data.type === "chat") {
+  const p = game.players[id];
+  if (!p) return;
+
+  const msg = String(data.message).slice(0,80);
+
+  broadcast({
+    type: "chat",
+    name: p.name.slice(0,15),
+    color: p.color,
+    message: msg
+  });
+}
+
   });
 
   ws.on("close", ()=> game.removePlayer(id));
