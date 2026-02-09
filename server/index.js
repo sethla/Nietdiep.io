@@ -37,12 +37,19 @@ wss.on("connection", ws => {
   ws.send(JSON.stringify({ type: "requestSetup" }));
 
   ws.on("message", msg => {
-    const data = JSON.parse(msg);
-    if (data.type === "setup") game.addPlayer(id, data.name, data.color);
-    if (data.type === "input") ws.input = data;
-    if (data.type === "shoot") game.shoot(id);
-    if (data.type === "respawn") game.respawnPlayer(id);
-  });
+  const data = JSON.parse(msg);
+
+  if (data.type === "setup") {
+    game.addPlayer(id, data.name, data.color);
+
+    // stuur meteen init terug
+    ws.send(JSON.stringify({ type: "init", id }));
+  }
+
+  if (data.type === "input") ws.input = data;
+  if (data.type === "shoot") game.shoot(id);
+  if (data.type === "respawn") game.respawnPlayer(id);
+});
 
   ws.on("close", () => {
     game.removePlayer(id);
