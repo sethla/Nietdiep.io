@@ -1,60 +1,97 @@
-const WebSocket = require("ws");
-const Game = require("./game");
+const WORLD_SIZE = 5000;
 
-const wss = new WebSocket.Server({ port: 8080 });
-const game = new Game();
-const clients = {};
-let lastTime = Date.now();
-
-wss.on("connection", ws => {
-  const id = Math.random().toString(36).slice(2);
-  clients[id] = ws;
-
-  // Ask client to setup name/color
-  ws.send(JSON.stringify({ type: "requestSetup" }));
-
-  ws.on("message", msg => {
-    const data = JSON.parse(msg);
-
-    if (data.type === "setup") {
-      // Add player immediately
-      game.addPlayer(id, data.name || "Player", data.color || "#4caf50");
-      ws.send(JSON.stringify({ type: "init", id }));
-    }
-
-    if (data.type === "input") ws.input = data;
-    if (data.type === "shoot") game.shoot(id);
-    if (data.type === "respawn") game.respawnPlayer(id);
-  });
-
-  ws.on("close", () => {
-    game.removePlayer(id); // remove only on disconnect
-    delete clients[id];
-  });
-});
-
-// 120 FPS server loop
-setInterval(() => {
-  const now = Date.now();
-  const delta = now - lastTime;
-  lastTime = now;
-
-  // Move players
-  for (const id in clients) {
-    const ws = clients[id];
-    if (ws.input) game.movePlayer(id, ws.input, delta);
+class Game {
+  constructor() {
+    this.players = {};
+    this.bullets = [];
   }
 
-  game.update(delta);
+  addPlayer(id, name, color) {
+    this.players[id] = {
+      id,
+      name: name || "Player",
+      color: color || "#4caf50",
+      x: Math.random() * WORLD_SIZE,
+      y: Math.random() * WORLD_SIZE,
+      angle: 0,
+      speed: 5,
+      health: 100,
+      alive: true,
+      xp: 0,
+      level: 1
+    };
+  }
 
-  const state = JSON.stringify({
-    type: "state",
-    players: game.players,
-    bullets: game.bullets
-  });
+  removePlayer(id) {
+    delete this.players[id];
+  }
 
-  wss.clients.forEach(c => {
-    if (c.readyState === WebSocket.OPEN) c.send(state);
-  });
+  respawnPlayer(id) {
+    const p = this.players[id];
+    if (!p) return;
+    p.x = Math.random() * WORLD_SIZE;
+    p.y = Math.random() * WORLD_SIZE;
+    p.health = 100;
+    p.alive = true;
+  }
 
-}, 1000 / 120);
+  movePlayer(id, input, delta) {
+    const p = this.players[id];
+    if (!p || !p.alive) return;
+
+    p.angle = input.angle;
+
+    if (input.up) {
+      p.x += Math.cos(p.angle) * p.speed * (delta / 16);
+      p.y += Math.sin(p.angle) * p.speed * (delta / 16);
+
+      // map borders
+      p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
+      p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
+    }
+  }
+
+  shoot(id) {
+    const p = this.players[id];
+    if (!p || !p.alive) return;
+
+    this.bullets.push({
+      x: p.x,
+      y: p.y,
+      vx: Math.cos(p.angle) * 10,
+      vy: Math.sin(p.angle) * 10,
+      owner: id,
+      life: 100
+    });
+  }
+
+  update(delta) {
+    // bullets
+    this.bullets.forEach(b => {
+      b.x += b.vx;
+      b.y += b.vy;
+      b.life--;
+    });
+
+    this.bullets = this.bullets.filter(b => b.life > 0);
+
+    // damage example (if bullet hits player)
+    this.bullets.forEach(b => {
+      for (let id in this.players) {
+        const p = this.players[id];
+        if (!p.alive || id === b.owner) continue;
+
+        const dx = p.x - b.x;
+        const dy = p.y - b.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 20) { // hit
+          p.health -= 20;
+          b.life = 0;
+          if (p.health <= 0) p.alive = false;
+        }
+      }
+    });
+  }
+}
+
+module.exports = Game;

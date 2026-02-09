@@ -1,5 +1,5 @@
 export function drawGrid(ctx, camera, canvas, gridSize = 50) {
-  ctx.strokeStyle = "#00000057";
+  ctx.strokeStyle = "#fff"; // white grid
   ctx.lineWidth = 1;
 
   const startX = Math.floor(camera.x / gridSize) * gridSize;
@@ -27,7 +27,7 @@ export function drawMinimap(ctx, players, myId, worldSize) {
   const x = ctx.canvas.width - size - padding;
   const y = padding;
 
-  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
   ctx.fillRect(x, y, size, size);
 
   for (let id in players) {
@@ -37,17 +37,16 @@ export function drawMinimap(ctx, players, myId, worldSize) {
 
     ctx.beginPath();
     ctx.arc(px, py, 3, 0, Math.PI * 2);
-    ctx.fillStyle = id === myId ? "#4caf50" : "#fff";
+    ctx.fillStyle = id === myId ? "#4caf50" : "#f44336";
     ctx.fill();
   }
 
   ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 2;
   ctx.strokeRect(x, y, size, size);
 }
 
 export function drawMapBorder(ctx, worldSize, camera, canvas) {
   ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 5;
+  ctx.lineWidth = 4;
   ctx.strokeRect(-camera.x, -camera.y, worldSize, worldSize);
 }
