@@ -5,13 +5,33 @@ const Game = require("./game");
 const game = new Game();
 const clients = {};
 
+const fs = require("fs");
+const path = require("path");
+
 const server = http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end("Nietdiep.io server");
+  // Standaard naar index.html
+  let filePath = path.join(__dirname, "..", "index.html");
+  if (req.url !== "/") {
+    filePath = path.join(__dirname, "..", req.url);
+  }
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end("Not found");
+      return;
+    }
+
+    let contentType = "text/html";
+    if (filePath.endsWith(".js")) contentType = "text/javascript";
+    if (filePath.endsWith(".css")) contentType = "text/css";
+
+    res.writeHead(200, { "Content-Type": contentType });
+    res.end(data);
+  });
 });
 
 const wss = new WebSocket.Server({ server });
-
 wss.on("connection", ws => {
   const id = Math.random().toString(36).slice(2);
   clients[id] = ws;
@@ -59,3 +79,4 @@ setInterval(() => {
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
