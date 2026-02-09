@@ -38,10 +38,13 @@ class Game {
   movePlayer(id, input, delta) {
     const p = this.players[id];
     if (!p || !p.alive) return;
+
     p.angle = input.angle;
     if (input.up) {
       p.x += Math.cos(p.angle) * p.speed * (delta / 16);
       p.y += Math.sin(p.angle) * p.speed * (delta / 16);
+
+      // Map borders
       p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
       p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
     }
@@ -50,6 +53,7 @@ class Game {
   shoot(id) {
     const p = this.players[id];
     if (!p || !p.alive) return;
+
     this.bullets.push({
       x: p.x,
       y: p.y,
@@ -61,20 +65,26 @@ class Game {
   }
 
   update(delta) {
+    // Update bullets
     this.bullets.forEach(b => {
       b.x += b.vx;
       b.y += b.vy;
       b.life--;
     });
+
     this.bullets = this.bullets.filter(b => b.life > 0);
 
+    // Bullet collisions
     this.bullets.forEach(b => {
       for (let id in this.players) {
         const p = this.players[id];
         if (!p.alive || id === b.owner) continue;
+
         const dx = p.x - b.x;
         const dy = p.y - b.y;
-        if (Math.sqrt(dx*dx + dy*dy) < 20) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist < 20) {
           p.health -= 20;
           b.life = 0;
           if (p.health <= 0) p.alive = false;

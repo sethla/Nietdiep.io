@@ -7,7 +7,7 @@ const Game = require("./game");
 const game = new Game();
 const clients = {};
 
-// HTTP server
+// HTTP server to serve client files
 const server = http.createServer((req, res) => {
   let filePath = req.url === "/" ? "/index.html" : req.url;
   const fullPath = path.join(__dirname, "..", filePath);
@@ -50,7 +50,7 @@ wss.on("connection", ws => {
   });
 });
 
-// Game loop 120 FPS
+// 120 FPS game loop
 let lastTime = Date.now();
 setInterval(() => {
   const now = Date.now();
