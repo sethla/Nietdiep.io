@@ -1,17 +1,21 @@
 const http = require("http");
+const fs = require("fs");
+const path = require("path");
 const WebSocket = require("ws");
 const Game = require("./game");
 
 const game = new Game();
 const clients = {};
 
-const fs = require("fs");
-const path = require("path");
-
+// HTTP server: serve static files
 const server = http.createServer((req, res) => {
-  // Standaard naar index.html
-  let filePath = path.join(__dirname, "..", "index.html");
-  if (req.url !== "/") {
+  let filePath;
+
+  // als root, ga naar index.html
+  if (req.url === "/") {
+    filePath = path.join(__dirname, "..", "index.html");
+  } else {
+    // anders serveer client bestanden
     filePath = path.join(__dirname, "..", req.url);
   }
 
@@ -22,6 +26,7 @@ const server = http.createServer((req, res) => {
       return;
     }
 
+    // content-type detectie
     let contentType = "text/html";
     if (filePath.endsWith(".js")) contentType = "text/javascript";
     if (filePath.endsWith(".css")) contentType = "text/css";
@@ -31,7 +36,9 @@ const server = http.createServer((req, res) => {
   });
 });
 
+// WebSocket server via dezelfde HTTP server
 const wss = new WebSocket.Server({ server });
+
 wss.on("connection", ws => {
   const id = Math.random().toString(36).slice(2);
   clients[id] = ws;
@@ -52,7 +59,7 @@ wss.on("connection", ws => {
   });
 });
 
-// 120 FPS
+// 120 FPS game loop
 let lastTime = Date.now();
 setInterval(() => {
   const now = Date.now();
@@ -77,6 +84,6 @@ setInterval(() => {
   });
 }, 1000 / 120);
 
+// start server
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
