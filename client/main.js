@@ -1,3 +1,6 @@
+import { drawGrid, drawMinimap } from "./render.js";
+const WORLD_SIZE = 3000;
+
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 
@@ -90,6 +93,8 @@ function draw() {
   });
 
   ctx.restore();
+  drawMinimap(ctx, players, myId, WORLD_SIZE);
+
 }
 
 function loop() {
