@@ -6,8 +6,8 @@ const ctx = canvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-// const socket = new WebSocket("ws://localhost:8080");
-const socket = new WebSocket("wss://nietdiep-io.onrender.com");
+ const socket = new WebSocket("ws://localhost:8080");
+//const socket = new WebSocket("wss://nietdiep-io.onrender.com");
 let myId = null;
 let players = {};
 let bullets = {};
