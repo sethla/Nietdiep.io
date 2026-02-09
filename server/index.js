@@ -7,16 +7,14 @@ const Game = require("./game");
 const game = new Game();
 const clients = {};
 
-// HTTP server: serve static files
+// HTTP server serveert index.html + client JS
 const server = http.createServer((req, res) => {
   let filePath;
 
-  // als root, ga naar index.html
   if (req.url === "/") {
     filePath = path.join(__dirname, "..", "index.html");
   } else {
-    // anders serveer client bestanden
-    filePath = path.join(__dirname, "..", req.url);
+    filePath = path.join(__dirname, "..", "client", req.url);
   }
 
   fs.readFile(filePath, (err, data) => {
@@ -26,7 +24,6 @@ const server = http.createServer((req, res) => {
       return;
     }
 
-    // content-type detectie
     let contentType = "text/html";
     if (filePath.endsWith(".js")) contentType = "text/javascript";
     if (filePath.endsWith(".css")) contentType = "text/css";
@@ -36,7 +33,7 @@ const server = http.createServer((req, res) => {
   });
 });
 
-// WebSocket server via dezelfde HTTP server
+// WSS server
 const wss = new WebSocket.Server({ server });
 
 wss.on("connection", ws => {
@@ -84,6 +81,5 @@ setInterval(() => {
   });
 }, 1000 / 120);
 
-// start server
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
