@@ -1,13 +1,16 @@
+const http = require("http");
 const WebSocket = require("ws");
 const Game = require("./game");
 
-const PORT = process.env.PORT || 8080;
-const wss = new WebSocket.Server({ port: PORT });
 const game = new Game();
 const clients = {};
-let lastTime = Date.now();
 
-console.log(`Server running on port ${PORT}`);
+const server = http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end("Nietdiep.io server");
+});
+
+const wss = new WebSocket.Server({ server });
 
 wss.on("connection", ws => {
   const id = Math.random().toString(36).slice(2);
@@ -17,12 +20,7 @@ wss.on("connection", ws => {
 
   ws.on("message", msg => {
     const data = JSON.parse(msg);
-
-    if (data.type === "setup") {
-      game.addPlayer(id, data.name, data.color);
-      ws.send(JSON.stringify({ type: "init", id }));
-    }
-
+    if (data.type === "setup") game.addPlayer(id, data.name, data.color);
     if (data.type === "input") ws.input = data;
     if (data.type === "shoot") game.shoot(id);
     if (data.type === "respawn") game.respawnPlayer(id);
@@ -35,6 +33,7 @@ wss.on("connection", ws => {
 });
 
 // 120 FPS
+let lastTime = Date.now();
 setInterval(() => {
   const now = Date.now();
   const delta = now - lastTime;
@@ -57,3 +56,6 @@ setInterval(() => {
     if (c.readyState === WebSocket.OPEN) c.send(state);
   });
 }, 1000 / 120);
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
