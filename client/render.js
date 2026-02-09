@@ -1,5 +1,5 @@
 export function drawGrid(ctx, camera, canvas, gridSize = 50) {
-  ctx.strokeStyle = "#fff";
+  ctx.strokeStyle = "#00000057";
   ctx.lineWidth = 1;
 
   const startX = Math.floor(camera.x / gridSize) * gridSize;
@@ -27,7 +27,7 @@ export function drawMinimap(ctx, players, myId, worldSize) {
   const x = ctx.canvas.width - size - padding;
   const y = padding;
 
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillStyle = "rgba(255, 255, 255, 0.82)";
   ctx.fillRect(x, y, size, size);
 
   for (let id in players) {

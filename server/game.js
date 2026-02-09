@@ -10,9 +10,11 @@ class Game {
     this.bullets = [];
   }
 
-  addPlayer(id) {
+  addPlayer(id, name = "Player", color = "#4caf50") {
     this.players[id] = {
       id,
+      name,
+      color,
       x: Math.random() * WORLD_SIZE,
       y: Math.random() * WORLD_SIZE,
       angle: 0,
@@ -20,7 +22,7 @@ class Game {
       health: MAX_HEALTH,
       alive: true,
       xp: 0,
-      level: 1,
+      level: 1
     };
   }
 
@@ -31,7 +33,6 @@ class Game {
   respawnPlayer(id) {
     const p = this.players[id];
     if (!p) return;
-
     p.x = Math.random() * WORLD_SIZE;
     p.y = Math.random() * WORLD_SIZE;
     p.health = MAX_HEALTH;
@@ -45,7 +46,7 @@ class Game {
     p.angle = input.angle;
 
     if (input.up) {
-      const distance = p.speed * (delta / 1000); // speed per second
+      const distance = p.speed * (delta / 1000);
       p.x += Math.cos(p.angle) * distance;
       p.y += Math.sin(p.angle) * distance;
     }
@@ -61,10 +62,10 @@ class Game {
     this.bullets.push({
       x: p.x,
       y: p.y,
-      vx: Math.cos(p.angle) * 500, // pixels/sec
+      vx: Math.cos(p.angle) * 500,
       vy: Math.sin(p.angle) * 500,
       owner: id,
-      life: 2000 // ms
+      life: 2000
     });
   }
 
@@ -84,6 +85,7 @@ class Game {
           b.life = 0;
           if (p.health <= 0) {
             p.alive = false;
+            this._gainXP(b.owner, 10);
           }
         }
       }
@@ -106,13 +108,6 @@ class Game {
     }
 
     this.bullets = this.bullets.filter(b => b.life > 0);
-
-    // Remove dead players from the map
-    for (const id in this.players) {
-      if (!this.players[id].alive) {
-        delete this.players[id];
-      }
-    }
   }
 
   _collide(player, bullet) {
@@ -125,6 +120,14 @@ class Game {
     const dx = a.x - b.x;
     const dy = a.y - b.y;
     return Math.sqrt(dx*dx + dy*dy) < PLAYER_SIZE * 2;
+  }
+
+  _gainXP(id, amount) {
+    const p = this.players[id];
+    if (!p) return;
+    p.xp += amount;
+    const newLevel = Math.floor(p.xp / 100) + 1;
+    if (newLevel > p.level) p.level = newLevel;
   }
 }
 
