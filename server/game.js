@@ -2,21 +2,22 @@ const WORLD_SIZE = 5000;
 
 class Game {
   constructor() {
-    this.players = {}; // echte spelers
-    this.bots = {};    // AI bots
+    this.players = {};
+    this.bots = {};
     this.bullets = [];
     this.nextBotId = 1;
-    this.maxBots = 10;
+    this.maxBots = 15; // dynamisch max bots
   }
 
+  // Voeg speler toe
   addPlayer(id, name, color) {
-    name = name.slice(0, 15); // max 15 chars
+    name = name.slice(0, 15);
     this.players[id] = {
       id,
       name: name || "Player",
       color: color || "#4caf50",
-      x: Math.random() * WORLD_SIZE,
-      y: Math.random() * WORLD_SIZE,
+      x: this.randomSpawn(),
+      y: this.randomSpawn(),
       angle: 0,
       speed: 5,
       health: 100,
@@ -26,19 +27,27 @@ class Game {
     };
   }
 
+  // Verwijder speler
   removePlayer(id) {
     delete this.players[id];
   }
 
-respawnPlayer(id) {
-  const p = this.players[id];
-  if (!p) return;
-  p.x = 50 + Math.random() * (WORLD_SIZE - 100);
-  p.y = 50 + Math.random() * (WORLD_SIZE - 100);
-  p.health = 100;
-  p.alive = true;
-}
+  // Respawn speler
+  respawnPlayer(id) {
+    const p = this.players[id];
+    if (!p) return;
+    p.x = this.randomSpawn();
+    p.y = this.randomSpawn();
+    p.health = 100;
+    p.alive = true;
+  }
 
+  // Random spawn binnen map
+  randomSpawn() {
+    return 50 + Math.random() * (WORLD_SIZE - 100);
+  }
+
+  // Voeg een bot toe (dynamisch)
   addBot() {
     if (Object.keys(this.bots).length >= this.maxBots) return;
     const id = "bot_" + this.nextBotId++;
@@ -46,9 +55,8 @@ respawnPlayer(id) {
       id,
       name: "Bot" + id,
       color: "#ff9800",
-      x: 50 + Math.random() * (WORLD_SIZE - 100),
-      y: 50 + Math.random() * (WORLD_SIZE - 100),
-
+      x: this.randomSpawn(),
+      y: this.randomSpawn(),
       angle: Math.random() * Math.PI * 2,
       speed: 4,
       health: 100,
@@ -56,35 +64,41 @@ respawnPlayer(id) {
     };
   }
 
+  // Move speler met WASD + mouse aiming
   movePlayer(id, input, delta) {
     const p = this.players[id];
-if (!p || !p.alive) return;  // dit zorgt dat je niet kan bewegen als je dead bent
+    if (!p || !p.alive) return;
 
-// WASD movement
-let dx=0, dy=0;
-if(input.up) dy-=1;
-if(input.down) dy+=1;
-if(input.left) dx-=1;
-if(input.right) dx+=1;
+    p.angle = input.angle;
 
-const len = Math.hypot(dx, dy);
-if(len>0){ dx/=len; dy/=len; }
+    let dx = 0, dy = 0;
+    if (input.up) dy -= 1;
+    if (input.down) dy += 1;
+    if (input.left) dx -= 1;
+    if (input.right) dx += 1;
 
-p.x += dx * p.speed * (delta/16);
-p.y += dy * p.speed * (delta/16);
+    const len = Math.hypot(dx, dy);
+    if (len > 0) {
+      dx /= len;
+      dy /= len;
+    }
 
-// Map borders
-p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
-p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
+    p.x += dx * p.speed * (delta / 16);
+    p.y += dy * p.speed * (delta / 16);
 
+    // Map borders
+    p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
+    p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
   }
 
+  // Beweeg bots automatisch en schiet
   moveBots(delta) {
     const allEntities = {...this.players, ...this.bots};
     for (let id in this.bots) {
       const bot = this.bots[id];
       if (!bot.alive) continue;
 
+      // zoek dichtstbijzijnde target
       let nearest = null;
       let nearestDist = Infinity;
       for (let otherId in allEntities) {
@@ -111,11 +125,13 @@ p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
         if (Math.random() < 0.02) this.shootBot(bot);
       }
 
+      // Map borders
       bot.x = Math.max(0, Math.min(WORLD_SIZE, bot.x));
       bot.y = Math.max(0, Math.min(WORLD_SIZE, bot.y));
     }
   }
 
+  // Schiet door speler
   shoot(id) {
     let p = this.players[id] || this.bots[id];
     if (!p || !p.alive) return;
@@ -130,6 +146,7 @@ p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
     });
   }
 
+  // Schiet door bot
   shootBot(bot) {
     this.bullets.push({
       x: bot.x,
@@ -141,7 +158,11 @@ p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
     });
   }
 
+  // Update game state
   update(delta) {
+    // Voeg automatisch bots toe als er minder dan max zijn
+    while(Object.keys(this.bots).length < this.maxBots) this.addBot();
+
     this.moveBots(delta);
 
     this.bullets.forEach(b => {
