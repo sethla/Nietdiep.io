@@ -6,7 +6,10 @@ const ctx = canvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-const socket = new WebSocket("ws://"+location.host);
+
+const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+const socket = new WebSocket(`${protocol}//${location.host}`);
+
 let myId = null;
 let players = {};
 let bots = {};
