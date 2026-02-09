@@ -1,86 +1,70 @@
-const http = require("http");
-const fs = require("fs");
-const path = require("path");
 const WebSocket = require("ws");
 const Game = require("./game");
 
+const PORT = process.env.PORT || 10000;
+const wss = new WebSocket.Server({ port: PORT });
 const game = new Game();
-const clients = {};
 
-// HTTP server to serve client files
-const server = http.createServer((req, res) => {
-  let filePath = req.url === "/" ? "/index.html" : req.url;
-  const fullPath = path.join(__dirname, "..", filePath);
+console.log("Server running on port", PORT);
 
-  fs.readFile(fullPath, (err, data) => {
-    if (err) {
-      res.writeHead(404);
-      res.end("404 Not Found");
-    } else {
-      let contentType = "text/html";
-      if (filePath.endsWith(".js")) contentType = "application/javascript";
-      if (filePath.endsWith(".css")) contentType = "text/css";
-
-      res.writeHead(200, { "Content-Type": contentType });
-      res.end(data);
-    }
-  });
-});
-
-// WebSocket server
-const wss = new WebSocket.Server({ server });
+// Voeg 10 bots bij start
+for (let i = 0; i < 10; i++) game.addBot();
 
 wss.on("connection", ws => {
   const id = Math.random().toString(36).slice(2);
-  clients[id] = ws;
-
-  ws.send(JSON.stringify({ type: "requestSetup" }));
 
   ws.on("message", msg => {
-  const data = JSON.parse(msg);
+    const data = JSON.parse(msg);
 
-  if (data.type === "setup") {
-    game.addPlayer(id, data.name, data.color);
+    if (data.type === "setup") {
+      game.addPlayer(id, data.name, data.color);
+      ws.send(JSON.stringify({ type: "init", id }));
+    }
 
-    // stuur meteen init terug
-    ws.send(JSON.stringify({ type: "init", id }));
-  }
-
-  if (data.type === "input") ws.input = data;
-  if (data.type === "shoot") game.shoot(id);
-  if (data.type === "respawn") game.respawnPlayer(id);
-});
+    if (data.type === "input") ws.input = data;
+    if (data.type === "shoot") game.shoot(id);
+    if (data.type === "respawn") game.respawnPlayer(id);
+    if (data.type === "chat") {
+      // broadcast chat
+      wss.clients.forEach(c => {
+        if (c.readyState === WebSocket.OPEN)
+          c.send(JSON.stringify({ type: "chat", name: data.name, message: data.message }));
+      });
+    }
+  });
 
   ws.on("close", () => {
     game.removePlayer(id);
-    delete clients[id];
   });
 });
 
-// 120 FPS game loop
-let lastTime = Date.now();
-setInterval(() => {
+let last = Date.now();
+function gameLoop() {
   const now = Date.now();
-  const delta = now - lastTime;
-  lastTime = now;
+  const delta = now - last;
+  last = now;
 
-  for (const id in clients) {
-    const ws = clients[id];
-    if (ws.input) game.movePlayer(id, ws.input, delta);
+  // update server state
+  for (let id in wss.clients) {
+    const ws = wss.clients[id];
+    if (!ws.input) continue;
+    game.movePlayer(id, ws.input, delta);
   }
-
   game.update(delta);
 
+  // broadcast state
   const state = JSON.stringify({
     type: "state",
     players: game.players,
+    bots: game.bots,
     bullets: game.bullets
   });
 
   wss.clients.forEach(c => {
     if (c.readyState === WebSocket.OPEN) c.send(state);
   });
-}, 1000 / 120);
 
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+  setTimeout(gameLoop, 1000 / 120); // 120fps server
+}
+
+gameLoop();
