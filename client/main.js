@@ -6,7 +6,7 @@ const ctx = canvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-
+// ✅ Correct protocol voor HTTPS/WSS
 const protocol = location.protocol === "https:" ? "wss:" : "ws:";
 const socket = new WebSocket(`${protocol}//${location.host}`);
 
@@ -15,14 +15,16 @@ let players = {};
 let bots = {};
 let bullets = [];
 
-let keys = { w:false,a:false,s:false,d:false };
+let keys = { w:false, a:false, s:false, d:false };
 let mouse = { x:0, y:0 };
 
+// Startmenu
 const startMenu = document.getElementById("startMenu");
 const nameInput = document.getElementById("nameInput");
 const colorInput = document.getElementById("colorInput");
 const startBtn = document.getElementById("startBtn");
 
+// Chat
 const chatDiv = document.getElementById("chat");
 const chatInput = document.getElementById("chatInput");
 
@@ -33,6 +35,7 @@ startBtn.onclick = () => {
   socket.send(JSON.stringify({ type:"setup", name, color }));
 };
 
+// Socket messages
 socket.onmessage = e => {
   const data = JSON.parse(e.data);
   if (data.type === "init") myId = data.id;
@@ -49,6 +52,7 @@ socket.onmessage = e => {
   }
 };
 
+// Keyboard input
 window.addEventListener("keydown", e => {
   if ("wasd".includes(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true;
   if (e.key === "Enter") chatInput.focus();
@@ -57,22 +61,30 @@ window.addEventListener("keyup", e => {
   if ("wasd".includes(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false;
 });
 
+// Mouse aiming
 window.addEventListener("mousemove", e => {
   mouse.x = e.clientX;
   mouse.y = e.clientY;
 });
 
+// Chat input
 chatInput.addEventListener("keydown", e => {
   if (e.key === "Enter" && chatInput.value.trim() !== "") {
-    socket.send(JSON.stringify({ type:"chat", name:players[myId]?.name || "Player", message: chatInput.value }));
+    socket.send(JSON.stringify({
+      type:"chat",
+      name: players[myId]?.name || "Player",
+      message: chatInput.value
+    }));
     chatInput.value = "";
   }
 });
 
+// Shooting
 window.addEventListener("mousedown", () => {
   socket.send(JSON.stringify({ type:"shoot" }));
 });
 
+// Stuur input naar server
 function sendInput() {
   if (!myId || !players[myId] || !players[myId].alive) return;
   const me = players[myId];
@@ -90,17 +102,19 @@ function sendInput() {
   }));
 }
 
+// Tekenen
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
   if (!myId || !players[myId]) return;
+
   const me = players[myId];
   ctx.save();
   ctx.translate(canvas.width/2 - me.x, canvas.height/2 - me.y);
 
-  // draw grid
+  // Grid
   drawGrid(ctx, {x:me.x, y:me.y}, canvas);
 
-  // draw bots
+  // Bots
   for (let id in bots) {
     const b = bots[id];
     if (!b.alive) continue;
@@ -108,15 +122,21 @@ function draw() {
     ctx.arc(b.x,b.y,20,0,Math.PI*2);
     ctx.fillStyle = b.color;
     ctx.fill();
+    // barrel
     ctx.strokeStyle="#fff";
     ctx.lineWidth=4;
     ctx.beginPath();
     ctx.moveTo(b.x,b.y);
     ctx.lineTo(b.x+Math.cos(b.angle)*30, b.y+Math.sin(b.angle)*30);
     ctx.stroke();
+    // health
+    ctx.fillStyle="red";
+    ctx.fillRect(b.x-20,b.y-30,40,5);
+    ctx.fillStyle="green";
+    ctx.fillRect(b.x-20,b.y-30,40*(b.health/100),5);
   }
 
-  // draw players
+  // Players
   for (let id in players) {
     const p = players[id];
     if (!p.alive) continue;
@@ -127,7 +147,6 @@ function draw() {
     ctx.strokeStyle=id===myId?"#fff":"#f44336";
     ctx.lineWidth=4;
     ctx.stroke();
-
     // barrel
     ctx.strokeStyle="#000";
     ctx.lineWidth=6;
@@ -135,15 +154,14 @@ function draw() {
     ctx.moveTo(p.x,p.y);
     ctx.lineTo(p.x+Math.cos(p.angle)*30, p.y+Math.sin(p.angle)*30);
     ctx.stroke();
-
-    // health bar
+    // health
     ctx.fillStyle="red";
     ctx.fillRect(p.x-20,p.y-30,40,5);
     ctx.fillStyle="green";
     ctx.fillRect(p.x-20,p.y-30,40*(p.health/100),5);
   }
 
-  // bullets
+  // Bullets
   bullets.forEach(b => {
     ctx.beginPath();
     ctx.arc(b.x,b.y,5,0,Math.PI*2);
@@ -153,10 +171,11 @@ function draw() {
 
   ctx.restore();
 
+  // Minimap
   drawMinimap(ctx, players, bots, myId, WORLD_SIZE);
 
   // XP bar
-  if(players[myId]) {
+  if(players[myId]){
     const p = players[myId];
     ctx.fillStyle="#222";
     ctx.fillRect(20,canvas.height-40,200,20);
@@ -169,7 +188,7 @@ function draw() {
   }
 }
 
-function loop() {
+function loop(){
   sendInput();
   draw();
   requestAnimationFrame(loop);
