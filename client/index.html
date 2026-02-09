@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Nietdiep.io</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #bebebe; font-family: sans-serif; color: #fff; }
+    canvas { display: block; }
+    #startMenu, #respawnMenu {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #222;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    input { margin: 5px; padding: 5px; font-size: 16px; }
+    button { padding: 10px 20px; margin-top: 10px; cursor: pointer; }
+    .GenericButton {
+        background-color: white;
+        color: black;
+        padding: 11px;
+        border-radius: 5px;
+        text-decoration: none;
+
+    }
+
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="startMenu">
+    <h2>Nietdiep.io</h2>
+    <input id="nameInput" placeholder="Name" maxlength="10">
+    <input type="color" id="colorInput" value="#4caf50">
+    <button id="startBtn">Start</button>
+    <a class="GenericButton" href="OverHetTeam!.html">ons team!</a>
+  </div>
+
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>
