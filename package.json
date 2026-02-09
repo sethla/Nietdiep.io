@@ -1,0 +1,8 @@
+{
+  "name": "diepio-clone",
+  "version": "1.0.0",
+  "main": "server/index.js",
+  "dependencies": {
+    "ws": "^8.19.0"
+  }
+}
