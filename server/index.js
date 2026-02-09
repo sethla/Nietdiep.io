@@ -1,10 +1,28 @@
+const express = require("express");
+const path = require("path");
+const http = require("http");
 const WebSocket = require("ws");
 const { Game, WORLD_SIZE } = require("./game");
 
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
 const PORT = process.env.PORT || 10000;
-const wss = new WebSocket.Server({ port: PORT });
 const game = new Game();
 
+/* ------------------ */
+/* SERVE CLIENT FILES */
+/* ------------------ */
+app.use(express.static(path.join(__dirname, "../client")));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "../client/index.html"));
+});
+
+/* ------------------ */
+/* WEBSOCKET LOGIC    */
+/* ------------------ */
 wss.on("connection", ws => {
   const id = Math.random().toString(36).slice(2);
   game.spawnPlayer(id);
@@ -12,7 +30,13 @@ wss.on("connection", ws => {
   ws.send(JSON.stringify({ type: "init", id }));
 
   ws.on("message", msg => {
-    const data = JSON.parse(msg);
+    let data;
+    try {
+      data = JSON.parse(msg);
+    } catch {
+      return;
+    }
+
     if (data.type === "input") game.movePlayer(id, data);
     if (data.type === "shoot") game.shoot(id);
   });
@@ -20,6 +44,9 @@ wss.on("connection", ws => {
   ws.on("close", () => game.removePlayer(id));
 });
 
+/* ------------------ */
+/* GAME LOOP          */
+/* ------------------ */
 setInterval(() => {
   game.update();
 
@@ -36,4 +63,9 @@ setInterval(() => {
   });
 }, 1000 / 60);
 
-console.log("Server running on port", PORT);
+/* ------------------ */
+/* START SERVER       */
+/* ------------------ */
+server.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
