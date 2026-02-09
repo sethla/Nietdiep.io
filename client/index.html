@@ -5,10 +5,38 @@
   <style>
     body { margin: 0; overflow: hidden; background: #111; }
     canvas { display: block; }
+    #respawnMenu {
+      display:none;
+      position:absolute;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      background:#222;
+      color:white;
+      padding:20px;
+      border-radius:10px;
+      text-align:center;
+      font-family:sans-serif;
+    }
+    #respawnBtn {
+      padding: 10px 20px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
-<script type="module" src="main.js"></script>
+
+  <div id="respawnMenu">
+    <h2>You Died!</h2>
+    <button id="respawnBtn">Respawn</button>
+  </div>
+
+  <script type="module" src="main.js"></script>
 </body>
 </html>
