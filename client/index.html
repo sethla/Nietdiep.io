@@ -3,12 +3,36 @@
 <head>
   <title>Nietdiep.io</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #111; }
+    body { margin: 0; overflow: hidden; background: #bebebe; font-family: sans-serif; color: #fff; }
     canvas { display: block; }
+    #startMenu, #respawnMenu {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #222;
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+    }
+    input { margin: 5px; padding: 5px; font-size: 16px; }
+    button { padding: 10px 20px; margin-top: 10px; cursor: pointer; }
   </style>
 </head>
 <body>
   <canvas id="game"></canvas>
-<script type="module" src="main.js"></script>
+
+  <div id="startMenu">
+    <h2>Nietdiep.io</h2>
+    <input id="nameInput" placeholder="Name" maxlength="10">
+    <input type="color" id="colorInput" value="#4caf50">
+    <button id="startBtn">Start</button>
+  </div>
+
+  <div id="respawnMenu">
+    <h2>You Died!</h2>
+    <button id="respawnBtn">Respawn</button>
+  </div>
+
+  <script type="module" src="main.js"></script>
 </body>
 </html>
