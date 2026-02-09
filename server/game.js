@@ -30,14 +30,14 @@ class Game {
     delete this.players[id];
   }
 
-  respawnPlayer(id) {
-    const p = this.players[id];
-    if (!p) return;
-    p.x = Math.random() * WORLD_SIZE;
-    p.y = Math.random() * WORLD_SIZE;
-    p.health = 100;
-    p.alive = true;
-  }
+respawnPlayer(id) {
+  const p = this.players[id];
+  if (!p) return;
+  p.x = 50 + Math.random() * (WORLD_SIZE - 100);
+  p.y = 50 + Math.random() * (WORLD_SIZE - 100);
+  p.health = 100;
+  p.alive = true;
+}
 
   addBot() {
     if (Object.keys(this.bots).length >= this.maxBots) return;
@@ -46,8 +46,9 @@ class Game {
       id,
       name: "Bot" + id,
       color: "#ff9800",
-      x: Math.random() * WORLD_SIZE,
-      y: Math.random() * WORLD_SIZE,
+      x: 50 + Math.random() * (WORLD_SIZE - 100),
+      y: 50 + Math.random() * (WORLD_SIZE - 100),
+
       angle: Math.random() * Math.PI * 2,
       speed: 4,
       health: 100,
@@ -57,27 +58,25 @@ class Game {
 
   movePlayer(id, input, delta) {
     const p = this.players[id];
-    if (!p || !p.alive) return;
+if (!p || !p.alive) return;  // dit zorgt dat je niet kan bewegen als je dead bent
 
-    p.angle = input.angle;
+// WASD movement
+let dx=0, dy=0;
+if(input.up) dy-=1;
+if(input.down) dy+=1;
+if(input.left) dx-=1;
+if(input.right) dx+=1;
 
-    let dx = 0, dy = 0;
-    if (input.up) dy -= 1;
-    if (input.down) dy += 1;
-    if (input.left) dx -= 1;
-    if (input.right) dx += 1;
+const len = Math.hypot(dx, dy);
+if(len>0){ dx/=len; dy/=len; }
 
-    const len = Math.hypot(dx, dy);
-    if (len > 0) {
-      dx /= len;
-      dy /= len;
-    }
+p.x += dx * p.speed * (delta/16);
+p.y += dy * p.speed * (delta/16);
 
-    p.x += dx * p.speed * (delta / 16);
-    p.y += dy * p.speed * (delta / 16);
+// Map borders
+p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
+p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
 
-    p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
-    p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
   }
 
   moveBots(delta) {
