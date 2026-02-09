@@ -6,7 +6,6 @@ const ctx = canvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-// Render WSS URL
 const socket = new WebSocket("wss://nietdiep-io.onrender.com");
 
 let myId = null;
@@ -15,7 +14,6 @@ let bullets = {};
 let mouse = { x: 0, y: 0 };
 let keys = {};
 
-// Menu elements
 const startMenu = document.getElementById("startMenu");
 const startBtn = document.getElementById("startBtn");
 const nameInput = document.getElementById("nameInput");
@@ -34,22 +32,17 @@ respawnBtn.onclick = () => socket.send(JSON.stringify({ type: "respawn" }));
 
 socket.onmessage = e => {
   const data = JSON.parse(e.data);
-
   if (data.type === "requestSetup") startMenu.style.display = "block";
   if (data.type === "init") myId = data.id;
   if (data.type === "state") {
     players = data.players;
     bullets = data.bullets;
-
-    if (myId && players[myId] && !players[myId].alive) {
-      respawnMenu.style.display = "block";
-    } else {
-      respawnMenu.style.display = "none";
-    }
+    if (myId && players[myId] && !players[myId].alive) respawnMenu.style.display = "block";
+    else respawnMenu.style.display = "none";
   }
 };
 
-window.addEventListener("mousemove", e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+window.addEventListener("mousemove", e => mouse.x = e.clientX);
 window.addEventListener("keydown", e => keys[e.key] = true);
 window.addEventListener("keyup", e => keys[e.key] = false);
 window.addEventListener("mousedown", () => {
@@ -62,7 +55,6 @@ function sendInput() {
   const dx = mouse.x - canvas.width / 2;
   const dy = mouse.y - canvas.height / 2;
   const angle = Math.atan2(dy, dx);
-
   socket.send(JSON.stringify({ type: "input", angle, up: keys["w"] }));
 }
 
@@ -100,7 +92,6 @@ function draw() {
     ctx.strokeText(p.name, p.x, p.y - 30);
     ctx.fillText(p.name, p.x, p.y - 30);
 
-    // Health bar
     ctx.fillStyle = "#555";
     ctx.fillRect(p.x - 20, p.y - 25, 40, 5);
     ctx.fillStyle = "#fff";
@@ -117,7 +108,6 @@ function draw() {
   ctx.restore();
   drawMinimap(ctx, players, myId, WORLD_SIZE);
 
-  // XP bar
   const p = players[myId];
   if (p) {
     const barWidth = 300;
