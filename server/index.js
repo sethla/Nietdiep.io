@@ -7,33 +7,27 @@ const Game = require("./game");
 const game = new Game();
 const clients = {};
 
-// HTTP server serveert index.html + client JS
+// HTTP server
 const server = http.createServer((req, res) => {
-  let filePath;
+  let filePath = req.url === "/" ? "/index.html" : req.url;
+  const fullPath = path.join(__dirname, "..", filePath);
 
-  if (req.url === "/") {
-    filePath = path.join(__dirname, "..", "index.html");
-  } else {
-    filePath = path.join(__dirname, "..", "client", req.url);
-  }
-
-  fs.readFile(filePath, (err, data) => {
+  fs.readFile(fullPath, (err, data) => {
     if (err) {
       res.writeHead(404);
-      res.end("Not found");
-      return;
+      res.end("404 Not Found");
+    } else {
+      let contentType = "text/html";
+      if (filePath.endsWith(".js")) contentType = "application/javascript";
+      if (filePath.endsWith(".css")) contentType = "text/css";
+
+      res.writeHead(200, { "Content-Type": contentType });
+      res.end(data);
     }
-
-    let contentType = "text/html";
-    if (filePath.endsWith(".js")) contentType = "text/javascript";
-    if (filePath.endsWith(".css")) contentType = "text/css";
-
-    res.writeHead(200, { "Content-Type": contentType });
-    res.end(data);
   });
 });
 
-// WSS server
+// WebSocket server
 const wss = new WebSocket.Server({ server });
 
 wss.on("connection", ws => {
@@ -56,7 +50,7 @@ wss.on("connection", ws => {
   });
 });
 
-// 120 FPS game loop
+// Game loop 120 FPS
 let lastTime = Date.now();
 setInterval(() => {
   const now = Date.now();
