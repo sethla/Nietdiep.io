@@ -6,7 +6,7 @@ const ctx = canvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
-const socket = new WebSocket("wss://nietdiep-io.onrender.com");
+const socket = new WebSocket("wss://" + location.host);
 
 let myId = null;
 let players = {};
