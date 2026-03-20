@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>Shop</title>
+
+<style>
+body {
+    font-family: Arial;
+    background: #f2f2f2;
+    text-align: center;
+    margin: 0;
+}
+
+/* Titel */
+h1 {
+    margin-top: 80px;
+    font-size: 36px;
+}
+
+/* Shop grid */
+.shop {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 30px;
+    padding: 30px;
+    max-width: 1100px;
+    margin: auto;
+}
+
+/* Skin kaart */
+.skin-card {
+    background: white;
+    padding: 25px;
+    border: 3px solid #ccc;
+    border-radius: 15px;
+    transition: transform 0.2s;
+}
+
+.skin-card:hover {
+    transform: scale(1.08);
+}
+
+/* Afbeeldingen */
+.skin-card img {
+    width: 100%;
+    max-width: 180px;
+    height: auto;
+}
+
+/* Knoppen */
+button {
+    margin-top: 15px;
+    padding: 15px;
+    border: none;
+    background: #4CAF50;
+    color: white;
+    cursor: pointer;
+    width: 100%;
+    border-radius: 8px;
+    font-size: 18px;
+}
+
+button:disabled {
+    background: gray;
+}
+
+/* Wear skin knop */
+.wear-btn {
+    margin-top: 10px;
+    padding: 12px;
+    background: #2196F3; /* blauw */
+    border-radius: 8px;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    border: none;
+    width: 100%;
+    transition: all 0.2s ease;
+}
+
+.wear-btn:hover {
+    background: #0b7dda;
+}
+
+.wear-btn:disabled {
+    background: gray;
+    cursor: not-allowed;
+}
+
+/* Actieve skin rode knop */
+.wear-btn.active {
+    background: #f44336; /* rood voor actieve skin */
+    color: white;
+    font-weight: bold;
+}
+
+.wear-btn.active:hover {
+    background: #d32f2f; /* donkerder rood bij hover */
+}
+
+/* Back knop */
+.back-btn {
+    position: fixed;
+    left: 20px;
+    top: 20px;
+    padding: 15px 20px;
+    background: linear-gradient(135deg, #444, #222);
+    color: white;
+    border-radius: 30px;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    transition: all 0.25s ease;
+}
+
+.back-btn:hover {
+    background: linear-gradient(135deg, #666, #333);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.4);
+}
+
+.back-btn:active {
+    transform: scale(0.95);
+}
+
+/* 📱 Mobile */
+@media (max-width: 500px) {
+    h1 {
+        font-size: 24px;
+    }
+
+    .shop {
+        grid-template-columns: 1fr;
+    }
+
+    .skin-card img {
+        max-width: 140px;
+    }
+
+    button {
+        font-size: 16px;
+        padding: 12px;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<button class="back-btn" onclick="goBack()">← Terug</button>
+
+<h1>SHOP</h1>
+
+<div class="shop" id="shop"></div>
+
+<script>
+const skins = [
+    { id: "skin1", file: "skin1.png" },
+    { id: "skin2", file: "skin2.png" },
+    { id: "skin3", file: "skin3.png" },
+    { id: "skin4", file: "skin4.png" },
+    { id: "skin5", file: "skin5.png" },
+    { id: "skin6", file: "skin6.png" },
+    { id: "skin7", file: "skin7.png" },
+    { id: "skin8", file: "skin8.png" },
+    { id: "skin9", file: "skin9.png" }
+];
+
+// opgeslagen skins
+let owned = JSON.parse(localStorage.getItem("ownedSkins")) || [];
+let activeSkin = localStorage.getItem("activeSkin") || null;
+
+const shop = document.getElementById("shop");
+const cards = [];
+
+// Update alle knoppen op pagina
+function updateButtonsAll() {
+    cards.forEach(({ skin, buyBtn, wearBtn }) => {
+        if (owned.includes(skin.id)) {
+            buyBtn.innerText = "Owned";
+            buyBtn.disabled = true;
+
+            wearBtn.disabled = false;
+            if (activeSkin === skin.id) {
+                wearBtn.innerText = "Wearing";
+                wearBtn.classList.add("active"); // rood maken
+            } else {
+                wearBtn.innerText = "Wear Skin";
+                wearBtn.classList.remove("active");
+            }
+        } else {
+            buyBtn.innerText = "Unlock";
+            buyBtn.disabled = false;
+
+            wearBtn.disabled = true;
+            wearBtn.innerText = "Wear Skin";
+            wearBtn.classList.remove("active");
+        }
+    });
+}
+
+// Maak de skin-kaarten
+skins.forEach(skin => {
+    const card = document.createElement("div");
+    card.className = "skin-card";
+
+    const img = document.createElement("img");
+    img.src = "assets/skins/" + skin.file;
+
+    const buyBtn = document.createElement("button");
+    const wearBtn = document.createElement("button");
+    wearBtn.className = "wear-btn";
+
+    buyBtn.onclick = () => {
+        if (!owned.includes(skin.id)) {
+            owned.push(skin.id);
+            localStorage.setItem("ownedSkins", JSON.stringify(owned));
+        }
+        updateButtonsAll();
+    };
+
+    wearBtn.onclick = () => {
+        activeSkin = skin.id;
+        localStorage.setItem("activeSkin", activeSkin);
+        updateButtonsAll();
+    };
+
+    card.appendChild(img);
+    card.appendChild(buyBtn);
+    card.appendChild(wearBtn);
+    shop.appendChild(card);
+
+    cards.push({ skin, buyBtn, wearBtn });
+});
+
+updateButtonsAll();
+
+// terug knop
+function goBack() {
+    window.history.back();
+}
+</script>
+
+</body>
+</html>
+</html>
