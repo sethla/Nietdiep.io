@@ -81,7 +81,7 @@ setInterval(() => {
   wss.clients.forEach(c => {
     if (c.readyState === WebSocket.OPEN) c.send(state);
   });
-}, 1000 / 10);
+}, 1000 / 30);
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

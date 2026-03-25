@@ -11,9 +11,9 @@ class Game {
     this.players = {};
     this.bullets = [];
   }
-
+  
   addPlayer(id, name, color) {
-    const adminHash = crypto.createHash('sha256').update('adminpassword').digest('hex'); // Change 'adminpassword' to your desired password
+    const adminHash = crypto.createHash('sha256').update('adminpassword').digest('hex'); 
     if (crypto.createHash('sha256').update(name).digest('hex') === adminHash) 
       this.players[id] = {
       id,
