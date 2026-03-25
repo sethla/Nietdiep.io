@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="google-adsense-account" content="ca-pub-8693176932851324">
+  
+     crossorigin="anonymous"></script>
+  <title>Nietdiep.io</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #111; }
+    canvas { display: block; }
+    #startMenu, #respawnMenu {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      background: #222; color: #fff; padding: 20px;
+      border: 2px solid #fff; display: none;
+      text-align: center;
+    }
+    input { margin: 5px; }
+    button { margin-top: 10px; padding: 5px 10px; }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="startMenu">
+    <h2>Nietdiep.io</h2>
+    <input type="text" id="nameInput" placeholder="Name" maxlength="25" />
+    <input type="color" id="colorInput" value="#4caf50" />
+    <br/>
+    <div style="width:100%;height:0;padding-bottom:87%;position:relative;"><iframe src="https://giphy.com/embed/2J54tSa4XjIHLFeVfS" width="100%" height="100%" style="position:absolute" frameBorder="0" class="giphy-embed" allowFullScreen></iframe></div><p><a href="https://giphy.com/gifs/ear-angry-birds-listening-2J54tSa4XjIHLFeVfS">via GIPHY</a></p>
+    <button id="startBtn">Start</button>
+  </div>
+
+  <div id="respawnMenu">
+    <h2>You Died!</h2>
+    <div style="width:100%;height:0;padding-bottom:87%;position:relative;"><iframe src="https://giphy.com/embed/2J54tSa4XjIHLFeVfS" width="100%" height="100%" style="position:absolute" frameBorder="0" class="giphy-embed" allowFullScreen></iframe></div><p><a href="https://giphy.com/gifs/ear-angry-birds-listening-2J54tSa4XjIHLFeVfS">via GIPHY</a></p>
+    <button id="respawnBtn">Respawn</button>
+  </div>
+
+  <div id="upgradePanel" style="display:none; position: absolute; left: 20px; bottom: 20px; background: rgba(0,0,0,0.7); border: 2px solid #fff; color: #fff; padding: 10px; width: 260px; font-family: sans-serif; z-index:100;">
+    <div style="margin-bottom:8px;"><strong>Upgrade punten: <span id="upgradePoints">0</span></strong></div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+      <button data-stat="damage">Damage</button>
+      <button data-stat="power">Power</button>
+      <button data-stat="bulletSpeed">Bullet Speed</button>
+      <button data-stat="fireRate">Fire Rate</button>
+      <button data-stat="bodyDamage">Body Damage</button>
+      <button data-stat="regenerationRate">Regen</button>
+      <button data-stat="speed">Speed</button>
+      <button data-stat="maxHealth">Max Health</button>
+    </div>
+  </div>
+
+  <script type="module" src="client/main.js"></script>
+</body>
+</html>
