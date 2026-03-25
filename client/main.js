@@ -23,13 +23,14 @@ const respawnBtn = document.getElementById("respawnBtn");
 const upgradePanel = document.getElementById("upgradePanel");
 const upgradePointsText = document.getElementById("upgradePoints");
 
-function sendUpgrade(stat) {
-  socket.send(JSON.stringify({ type: "upgrade", stat }));
+function sendUpgrade(stat, multiplier = 1) {
+  socket.send(JSON.stringify({ type: "upgrade", stat, multiplier }));
 }
 
 upgradePanel.querySelectorAll("button[data-stat]").forEach(btn => {
+  const multi = btn.dataset.multi ? parseInt(btn.dataset.multi) : 1;
   btn.addEventListener("click", () => {
-    sendUpgrade(btn.dataset.stat);
+    sendUpgrade(btn.dataset.stat, multi);
   });
 });
 
@@ -59,6 +60,16 @@ socket.onmessage = e => {
     if (myId && players[myId] && players[myId].CanUpgrade > 0 && players[myId].alive) {
       upgradePanel.style.display = "block";
       upgradePointsText.textContent = players[myId].CanUpgrade;
+      // Update counts
+      const counts = players[myId].upgradeCounts || {};
+      document.getElementById("count-damage").textContent = counts.damage || 0;
+      document.getElementById("count-power").textContent = counts.power || 0;
+      document.getElementById("count-bulletSpeed").textContent = counts.bulletSpeed || 0;
+      document.getElementById("count-fireRate").textContent = counts.fireRate || 0;
+      document.getElementById("count-bodyDamage").textContent = counts.bodyDamage || 0;
+      document.getElementById("count-regenerationRate").textContent = counts.regenerationRate || 0;
+      document.getElementById("count-speed").textContent = counts.speed || 0;
+      document.getElementById("count-maxHealth").textContent = counts.maxHealth || 0;
     } else {
       upgradePanel.style.display = "none";
     }
@@ -68,7 +79,16 @@ socket.onmessage = e => {
 window.addEventListener("mousemove", e => {
   mouse.x = e.clientX;
   mouse.y = e.clientY;
-});window.addEventListener("keydown", e => keys[e.key] = true);
+});window.addEventListener("keydown", e => {
+  keys[e.key] = true;
+  if (upgradePanel.style.display !== "none") {
+    const stats = ["damage", "power", "bulletSpeed", "fireRate", "bodyDamage", "regenerationRate", "speed", "maxHealth"];
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= 8) {
+      sendUpgrade(stats[num - 1]);
+    }
+  }
+});
 window.addEventListener("keyup", e => keys[e.key] = false);
 window.addEventListener("mousedown", () => {
   if (!myId || !players[myId] || !players[myId].alive) return;
@@ -161,7 +181,6 @@ function draw() {
 function loop() {
   sendInput();
   draw();
-  requestAnimationFrame(loop);
 }
 
-loop();
+setInterval(loop, 1000 / 25);

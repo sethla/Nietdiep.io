@@ -18,6 +18,12 @@
     }
     input { margin: 5px; }
     button { margin-top: 10px; padding: 5px 10px; }
+    .upgrade-item { display: flex; flex-direction: column; align-items: center; }
+    .upgrade-btn { background: #4caf50; color: white; border: none; padding: 5px; cursor: pointer; border-radius: 5px; }
+    .upgrade-btn:hover { background: #45a049; }
+    .upgrade-btn-2x { background: #ff9800; color: white; border: none; padding: 3px; cursor: pointer; border-radius: 3px; margin-top: 2px; }
+    .upgrade-btn-2x:hover { background: #e68900; }
+    .upgrade-count { font-size: 12px; color: #ccc; }
   </style>
 </head>
 <body>
@@ -38,17 +44,49 @@
     <button id="respawnBtn">Respawn</button>
   </div>
 
-  <div id="upgradePanel" style="display:none; position: absolute; left: 20px; bottom: 20px; background: rgba(0,0,0,0.7); border: 2px solid #fff; color: #fff; padding: 10px; width: 260px; font-family: sans-serif; z-index:100;">
+  <div id="upgradePanel" style="display:none; position: absolute; left: 20px; bottom: 20px; background: rgba(0,0,0,0.8); border: 2px solid #fff; color: #fff; padding: 10px; width: 300px; font-family: sans-serif; z-index:100; border-radius: 10px;">
     <div style="margin-bottom:8px;"><strong>Upgrade punten: <span id="upgradePoints">0</span></strong></div>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-      <button data-stat="damage">Damage</button>
-      <button data-stat="power">Power</button>
-      <button data-stat="bulletSpeed">Bullet Speed</button>
-      <button data-stat="fireRate">Fire Rate</button>
-      <button data-stat="bodyDamage">Body Damage</button>
-      <button data-stat="regenerationRate">Regen</button>
-      <button data-stat="speed">Speed</button>
-      <button data-stat="maxHealth">Max Health</button>
+    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
+      <div class="upgrade-item">
+        <button data-stat="damage" class="upgrade-btn">Damage</button>
+        <button data-stat="damage" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-damage">0</span>
+      </div>
+      <div class="upgrade-item">
+        <button data-stat="power" class="upgrade-btn">Power</button>
+        <button data-stat="power" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-power">0</span>
+      </div>
+      <div class="upgrade-item">
+        <button data-stat="bulletSpeed" class="upgrade-btn">Bullet Speed</button>
+        <button data-stat="bulletSpeed" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-bulletSpeed">0</span>
+      </div>
+      <div class="upgrade-item">
+        <button data-stat="fireRate" class="upgrade-btn">Fire Rate</button>
+        <button data-stat="fireRate" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-fireRate">0</span>
+      </div>
+      <div class="upgrade-item">
+        <button data-stat="bodyDamage" class="upgrade-btn">Body Damage</button>
+        <button data-stat="bodyDamage" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-bodyDamage">0</span>
+      </div>
+      <div class="upgrade-item">
+        <button data-stat="regenerationRate" class="upgrade-btn">Regen</button>
+        <button data-stat="regenerationRate" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-regenerationRate">0</span>
+      </div>
+      <div class="upgrade-item">
+        <button data-stat="speed" class="upgrade-btn">Speed</button>
+        <button data-stat="speed" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-speed">0</span>
+      </div>
+      <div class="upgrade-item">
+        <button data-stat="maxHealth" class="upgrade-btn">Max Health</button>
+        <button data-stat="maxHealth" data-multi="2" class="upgrade-btn-2x">2x</button>
+        <span class="upgrade-count" id="count-maxHealth">0</span>
+      </div>
     </div>
   </div>
 

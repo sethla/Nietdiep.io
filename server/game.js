@@ -3,6 +3,8 @@ const LevelCostMultiplier = 1.1;
 const BaseLevelCost = 67;
 const maxOrbs = 50;
 const MaxLevel = 67;
+const crypto = require('crypto');
+
 class Game {
   constructor() {
     this.Orbs = {};
@@ -11,7 +13,8 @@ class Game {
   }
 
   addPlayer(id, name, color) {
-    if (name === "janana") 
+    const adminHash = crypto.createHash('sha256').update('adminpassword').digest('hex'); // Change 'adminpassword' to your desired password
+    if (crypto.createHash('sha256').update(name).digest('hex') === adminHash) 
       this.players[id] = {
       id,
       name: "NILL",
@@ -33,7 +36,8 @@ class Game {
       bodyDamage: 5,
       regenerationRate: 3,
       tick: 0,
-      bodyCooldown: 0
+      bodyCooldown: 0,
+      upgradeCounts: {}
 
     };
     else
@@ -59,7 +63,8 @@ class Game {
       bodyDamage: 10,
       regenerationRate: 0.0001,
       tick: 0,
-      bodyCooldown: 0
+      bodyCooldown: 0,
+      upgradeCounts: {}
 
     };
   }
@@ -88,7 +93,8 @@ class Game {
       p.bodyDamage = 10;
       p.regenerationRate = 0.0001;
       p.tick = 0;
-      p.bodyCooldown = 0
+      p.bodyCooldown = 0;
+      p.upgradeCounts = {};
 
   }
 
@@ -136,28 +142,30 @@ class Game {
     }
   }
 
-  applyUpgrade(id, stat) {
+  applyUpgrade(id, stat, multiplier = 1) {
     const p = this.players[id];
-    if (!p || p.CanUpgrade <= 0) return;
+    if (!p || p.CanUpgrade < multiplier) return;
 
     const upgrades = {
-      damage: () => { p.damage += 2; },
-      power: () => { p.power += 5; },
-      bulletSpeed: () => { p.bulletSpeed += 1; },
-      fireRate: () => { p.fireRate = Math.max(100, p.fireRate - 50); },
-      bodyDamage: () => { p.bodyDamage += 2; },
-      regenerationRate: () => { p.regenerationRate += 0.05; },
-      speed: () => { p.speed += 0.2; },
+      damage: () => { p.damage += 2 * multiplier; },
+      power: () => { p.power += 5 * multiplier; },
+      bulletSpeed: () => { p.bulletSpeed += 1 * multiplier; },
+      fireRate: () => { for(let i=0; i<multiplier; i++) p.fireRate = Math.max(100, p.fireRate - 50); },
+      bodyDamage: () => { p.bodyDamage += 2 * multiplier; },
+      regenerationRate: () => { p.regenerationRate += 0.05 * multiplier; },
+      speed: () => { p.speed += 0.2 * multiplier; },
       maxHealth: () => {
-        p.maxHealth += 20;
-        p.health = Math.min(p.maxHealth, p.health + 20);
+        p.maxHealth += 20 * multiplier;
+        p.health = Math.min(p.maxHealth, p.health + 20 * multiplier);
       }
     };
 
     if (upgrades[stat]) {
       upgrades[stat]();
-      p.CanUpgrade--;
+      p.CanUpgrade -= multiplier;
       if (p.CanUpgrade < 0) p.CanUpgrade = 0;
+      if (!p.upgradeCounts[stat]) p.upgradeCounts[stat] = 0;
+      p.upgradeCounts[stat] += multiplier;
     }
   }
   addOrbs() {

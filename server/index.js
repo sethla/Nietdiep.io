@@ -49,7 +49,7 @@ wss.on("connection", ws => {
   if (data.type === "input") ws.input = data;
   if (data.type === "shoot") game.shoot(id);
   if (data.type === "respawn") game.respawnPlayer(id);
-  if (data.type === "upgrade" && data.stat) game.applyUpgrade(id, data.stat);
+  if (data.type === "upgrade" && data.stat) game.applyUpgrade(id, data.stat, data.multiplier || 1);
 });
 
   ws.on("close", () => {
