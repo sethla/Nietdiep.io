@@ -5,9 +5,13 @@
   <title>Nietdiep.io</title>
   <style>
     body { margin: 0; overflow: hidden; background: #111; }
+    #game { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 0; }
+    #mapOverlay { z-index: 40; pointer-events: none; }
+    #mapOverlay canvas { pointer-events: auto; }
     canvas { display: block; }
     #startMenu, #respawnMenu {
       position: absolute;
+      z-index: 100;
       top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       background: rgba(0, 0, 0, 0.8);

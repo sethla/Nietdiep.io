@@ -9,6 +9,12 @@ const mapCtx = mapCanvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
+window.addEventListener('resize', () => {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  if (showMap) updateMapView();
+});
+
 const socket = new WebSocket("wss://" + location.host);
 
 let myId = null;
