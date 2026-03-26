@@ -15,7 +15,15 @@ window.addEventListener('resize', () => {
   if (showMap) updateMapView();
 });
 
-const socket = new WebSocket("wss://" + location.host);
+const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
+const socket = new WebSocket(wsProtocol + "//" + location.host);
+
+window.addEventListener("error", event => {
+  if (event.filename && event.filename.includes("googletagmanager.com")) {
+    event.preventDefault();
+    return true;
+  }
+});
 
 let myId = null;
 let players = {};
@@ -43,9 +51,11 @@ function updateMapView() {
   if (!showMap) return;
   
   mapOverlay.style.display = "block";
-  const mapSize = Math.min(innerWidth * 0.8, innerHeight * 0.8);
+  const mapSize = Math.min(innerWidth * 0.95, innerHeight * 0.95);
   mapCanvas.width = mapSize;
   mapCanvas.height = mapSize;
+  mapCanvas.style.width = mapSize + "px";
+  mapCanvas.style.height = mapSize + "px";
   
   mapCtx.clearRect(0, 0, mapSize, mapSize);
   
@@ -114,6 +124,9 @@ startBtn.onclick = () => {
   const name = nameInput.value || "Player";
   const color = colorInput.value || "#4caf50";
   startMenu.style.display = "none";
+  startMenu.classList.remove("show");
+  showMap = false;
+  mapOverlay.style.display = "none";
   socket.send(JSON.stringify({ type: "setup", name, color }));
 };
 
