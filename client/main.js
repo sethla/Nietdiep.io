@@ -19,7 +19,17 @@ const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
 const socket = new WebSocket(wsProtocol + "//" + location.host);
 
 window.addEventListener("error", event => {
-  if (event.filename && event.filename.includes("googletagmanager.com")) {
+  const isGTMResource = (event.filename && event.filename.includes("googletagmanager.com")) ||
+    (event.target && event.target.src && event.target.src.includes("googletagmanager.com"));
+
+  if (isGTMResource) {
+    event.preventDefault();
+    return true;
+  }
+});
+
+window.addEventListener("unhandledrejection", event => {
+  if (event.reason && typeof event.reason === "string" && event.reason.includes("googletagmanager.com")) {
     event.preventDefault();
     return true;
   }
