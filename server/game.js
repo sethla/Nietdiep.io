@@ -268,6 +268,54 @@ class Game {
     
     // Remove hit bullets
     this.bullets = this.bullets.filter(b => b.startTime > 0);
+    
+    // Spawn orbs
+    this.addOrbs();
+    
+    // Orb collisions
+    this.checkOrbCollisions();
+  }
+
+  addOrbs() {
+    while (Object.keys(this.Orbs).length < maxOrbs) {
+      const id = Math.random().toString(36).slice(2);
+      const size = Math.random() * 0.5 + 0.5; // Size between 0.5 and 1.0
+      const colorIndex = Math.floor(Math.random() * 5); // 5 different colors
+      const colors = ['#ff4444', '#44ff44', '#4444ff', '#ffff44', '#ff44ff'];
+      const xpValues = [5, 10, 15, 20, 25]; // XP based on color
+      
+      this.Orbs[id] = {
+        id,
+        x: Math.random() * WORLD_SIZE,
+        y: Math.random() * WORLD_SIZE,
+        size: size,
+        color: colors[colorIndex],
+        xpValue: xpValues[colorIndex] * size // XP = base XP * size
+      };
+    }
+  }
+
+  checkOrbCollisions() {
+    for (let orbId in this.Orbs) {
+      const orb = this.Orbs[orbId];
+      
+      for (let playerId in this.players) {
+        const p = this.players[playerId];
+        if (!p.alive) continue;
+
+        const dx = p.x - orb.x;
+        const dy = p.y - orb.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const orbRadius = 10 * orb.size; // Orbs have different sizes
+
+        if (dist < 20 + orbRadius) { // Player radius is 20
+          p.xp += orb.xpValue;
+          this.updateLevel(playerId);
+          delete this.Orbs[orbId];
+          break; // Orb consumed, no need to check other players
+        }
+      }
+    }
   }
 }
 

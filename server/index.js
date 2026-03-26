@@ -58,7 +58,7 @@ wss.on("connection", ws => {
   });
 });
 
-// 20 FPS game loop
+// 15 FPS game loop for reduced latency
 let lastTime = Date.now();
 setInterval(() => {
   const now = Date.now();
@@ -75,13 +75,14 @@ setInterval(() => {
   const state = JSON.stringify({
     type: "state",
     players: game.players,
-    bullets: game.bullets
+    bullets: game.bullets,
+    orbs: game.Orbs
   });
 
   wss.clients.forEach(c => {
     if (c.readyState === WebSocket.OPEN) c.send(state);
   });
-}, 1000 / 20);
+}, 1000 / 15);
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

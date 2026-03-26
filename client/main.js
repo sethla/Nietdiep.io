@@ -3,6 +3,9 @@ import { drawGrid, drawMinimap, drawMapBorder } from "./render.js";
 const WORLD_SIZE = 5000;
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
+const mapOverlay = document.getElementById("mapOverlay");
+const mapCanvas = document.getElementById("mapCanvas");
+const mapCtx = mapCanvas.getContext("2d");
 canvas.width = innerWidth;
 canvas.height = innerHeight;
 
@@ -11,8 +14,15 @@ const socket = new WebSocket("wss://" + location.host);
 let myId = null;
 let players = {};
 let bullets = {};
+let orbs = {};
 let mouse = { x: 0, y: 0 };
 let keys = {};
+let camera = { x: 0, y: 0 };
+let targetCamera = { x: 0, y: 0 };
+let cameraLerpSpeed = 0.05;
+let showMap = false;
+let lastServerState = null;
+let pendingInputs = [];
 
 const startMenu = document.getElementById("startMenu");
 const startBtn = document.getElementById("startBtn");
@@ -23,8 +33,68 @@ const respawnBtn = document.getElementById("respawnBtn");
 const upgradePanel = document.getElementById("upgradePanel");
 const upgradePointsText = document.getElementById("upgradePoints");
 
-function sendUpgrade(stat, multiplier = 1) {
-  socket.send(JSON.stringify({ type: "upgrade", stat, multiplier }));
+function updateMapView() {
+  if (!showMap) return;
+  
+  mapOverlay.style.display = "block";
+  const mapSize = Math.min(innerWidth * 0.8, innerHeight * 0.8);
+  mapCanvas.width = mapSize;
+  mapCanvas.height = mapSize;
+  
+  mapCtx.clearRect(0, 0, mapSize, mapSize);
+  
+  // Draw map background
+  mapCtx.fillStyle = "#111";
+  mapCtx.fillRect(0, 0, mapSize, mapSize);
+  
+  // Draw grid
+  mapCtx.strokeStyle = "#333";
+  mapCtx.lineWidth = 1;
+  const gridSize = 50;
+  const scale = mapSize / WORLD_SIZE;
+  
+  for (let x = 0; x < WORLD_SIZE; x += gridSize) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(x * scale, 0);
+    mapCtx.lineTo(x * scale, mapSize);
+    mapCtx.stroke();
+  }
+  
+  for (let y = 0; y < WORLD_SIZE; y += gridSize) {
+    mapCtx.beginPath();
+    mapCtx.moveTo(0, y * scale);
+    mapCtx.lineTo(mapSize, y * scale);
+    mapCtx.stroke();
+  }
+  
+  // Draw orbs
+  for (let id in orbs) {
+    const orb = orbs[id];
+    mapCtx.beginPath();
+    mapCtx.arc(orb.x * scale, orb.y * scale, 3 * orb.size, 0, Math.PI * 2);
+    mapCtx.fillStyle = orb.color;
+    mapCtx.fill();
+  }
+  
+  // Draw players
+  for (let id in players) {
+    const p = players[id];
+    if (!p.alive) continue;
+    
+    const px = p.x * scale;
+    const py = p.y * scale;
+    
+    mapCtx.beginPath();
+    mapCtx.arc(px, py, 4, 0, Math.PI * 2);
+    mapCtx.fillStyle = id === myId ? p.color : "#f44336";
+    mapCtx.fill();
+    
+    if (id === myId) {
+      mapCtx.strokeStyle = "#fff";
+      mapCtx.lineWidth = 2;
+      mapCtx.stroke();
+    }
+  }
 }
 
 upgradePanel.querySelectorAll("button[data-stat]").forEach(btn => {
@@ -45,16 +115,74 @@ respawnBtn.onclick = () => socket.send(JSON.stringify({ type: "respawn" }));
 
 socket.onmessage = e => {
   const data = JSON.parse(e.data);
-  if (data.type === "requestSetup") startMenu.style.display = "block";
+  if (data.type === "requestSetup") {
+    startMenu.style.display = "block";
+    startMenu.classList.add("show");
+    showMap = true;
+    updateMapView();
+  }
   if (data.type === "init") myId = data.id;
   if (data.type === "state") {
-    players = data.players;
-    bullets = data.bullets;
+    const serverPlayers = data.players;
+    const serverBullets = data.bullets;
+    const serverOrbs = data.orbs || {};
+    
+    // Store last server state for reconciliation
+    lastServerState = { players: { ...serverPlayers }, bullets: { ...serverBullets }, orbs: { ...serverOrbs } };
+    
+    // Reconcile player position
+    if (myId && serverPlayers[myId] && players[myId]) {
+      const serverPlayer = serverPlayers[myId];
+      const clientPlayer = players[myId];
+      
+      // If server position differs significantly from client prediction, snap to server
+      const dx = serverPlayer.x - clientPlayer.x;
+      const dy = serverPlayer.y - clientPlayer.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist > 50) { // If difference is too large, snap to server position
+        clientPlayer.x = serverPlayer.x;
+        clientPlayer.y = serverPlayer.y;
+      }
+      
+      // Update other server-controlled properties
+      clientPlayer.health = serverPlayer.health;
+      clientPlayer.xp = serverPlayer.xp;
+      clientPlayer.level = serverPlayer.level;
+      clientPlayer.CanUpgrade = serverPlayer.CanUpgrade;
+      clientPlayer.alive = serverPlayer.alive;
+      clientPlayer.upgradeCounts = serverPlayer.upgradeCounts || {};
+    }
+    
+    // Update other players and bullets/orbs directly
+    for (let id in serverPlayers) {
+      if (id !== myId) {
+        players[id] = serverPlayers[id];
+      }
+    }
+    
+    bullets = serverBullets;
+    orbs = serverOrbs;
 
-    if (myId && players[myId] && !players[myId].alive) {
-      respawnMenu.style.display = "block";
-    } else {
-      respawnMenu.style.display = "none";
+    if (myId && players[myId]) {
+      const me = players[myId];
+      if (!me.alive) {
+        respawnMenu.style.display = "block";
+        respawnMenu.classList.add("show");
+        showMap = true;
+        updateMapView();
+      } else {
+        respawnMenu.style.display = "none";
+        respawnMenu.classList.remove("show");
+        startMenu.style.display = "none";
+        startMenu.classList.remove("show");
+        showMap = false;
+        mapOverlay.style.display = "none";
+        
+        // Set target camera to follow player
+        targetCamera.x = me.x - canvas.width / 2;
+        targetCamera.y = me.y - canvas.height / 2;
+      }
     }
 
     if (myId && players[myId] && players[myId].CanUpgrade > 0 && players[myId].alive) {
@@ -101,8 +229,26 @@ function sendInput() {
   const dx = mouse.x - (canvas.width * 0.5);
   const dy = mouse.y - (canvas.height * 0.5);
   const angle = Math.atan2(dy, dx);
+  const input = { angle, up: keys["w"], timestamp: Date.now() };
+  
+  // Add to pending inputs for reconciliation
+  pendingInputs.push(input);
+  
+  // Client-side prediction
+  if (players[myId]) {
+    players[myId].angle = angle;
+    if (input.up) {
+      const delta = 16; // Assume 60fps
+      players[myId].x += Math.cos(angle) * players[myId].speed * (delta / 16);
+      players[myId].y += Math.sin(angle) * players[myId].speed * (delta / 16);
+      
+      // Keep within bounds
+      players[myId].x = Math.max(0, Math.min(WORLD_SIZE, players[myId].x));
+      players[myId].y = Math.max(0, Math.min(WORLD_SIZE, players[myId].y));
+    }
+  }
 
-  socket.send(JSON.stringify({ type: "input", angle, up: keys["w"] }));
+  socket.send(JSON.stringify({ type: "input", ...input }));
 }
 
 function draw() {
@@ -110,7 +256,12 @@ function draw() {
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const me = players[myId];
-  const camera = { x: me.x - canvas.width / 2, y: me.y - canvas.height / 2 };
+  
+  // Update camera with lerping
+  if (!showMap) {
+    camera.x += (targetCamera.x - camera.x) * cameraLerpSpeed;
+    camera.y += (targetCamera.y - camera.y) * cameraLerpSpeed;
+  }
 
   drawGrid(ctx, camera, canvas);
   drawMapBorder(ctx, WORLD_SIZE, camera, canvas);
@@ -161,6 +312,18 @@ function draw() {
     }
   });
 
+  // Render orbs
+  for (let id in orbs) {
+    const orb = orbs[id];
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, 10 * orb.size, 0, Math.PI * 2);
+    ctx.fillStyle = orb.color;
+    ctx.fill();
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
   ctx.restore();
   drawMinimap(ctx, players, myId, WORLD_SIZE);
 
@@ -190,6 +353,7 @@ function draw() {
 function loop() {
   sendInput();
   draw();
+  if (showMap) updateMapView();
 }
 
-setInterval(loop, 1000 / 25);
+setInterval(loop, 1000 / 15);
