@@ -18,6 +18,19 @@ window.addEventListener('resize', () => {
 const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
 const socket = new WebSocket(wsProtocol + "//" + location.host);
 
+// Debug: log connection status
+socket.onopen = () => {
+  console.log("✅ WebSocket connected");
+};
+
+socket.onerror = (err) => {
+  console.error("❌ WebSocket error:", err);
+};
+
+socket.onclose = () => {
+  console.log("❌ WebSocket closed");
+};
+
 // Fade-in animation
 let fadeInAlpha = 0;
 let isFadingIn = false;
@@ -31,10 +44,14 @@ let mouse = { x: 0, y: 0 };
 let keys = {};
 let camera = { x: 0, y: 0 };
 let targetCamera = { x: 0, y: 0 };
-let cameraLerpSpeed = 0.05;
+let cameraLerpSpeed = 0.01;
 let showMap = false;
 let lastServerState = null;
 let pendingInputs = [];
+let lastInputSent = 0;
+let joystick = { active: false, touchId: null, vx: 0, vy: 0 };
+let leaderboard = [];
+let queuePosition = 0;
 
 function startFadeIn() {
   isFadingIn = true;
@@ -138,52 +155,114 @@ respawnBtn.onclick = () => socket.send(JSON.stringify({ type: "respawn" }));
 
 socket.onmessage = e => {
   const data = JSON.parse(e.data);
+
   if (data.type === "requestSetup") {
+    console.log("📋 Server requesting setup");
     startMenu.style.display = "block";
     startMenu.classList.add("show");
     showMap = true;
     updateMapView();
   }
-  if (data.type === "init") myId = data.id;
+
+  if (data.type === "queued") {
+    console.log("⏳ Queued at position:", data.position);
+    queuePosition = data.position;
+    startMenu.style.display = "block";
+    startMenu.classList.add("show");
+
+    // Hide inputs and show queue info
+    document.querySelectorAll("#startMenu input").forEach(el => el.style.display = "none");
+    document.querySelectorAll("#startMenu button").forEach(el => el.style.display = "none");
+
+    let queueInfo = document.getElementById("queueInfo");
+    if (!queueInfo) {
+      queueInfo = document.createElement("div");
+      queueInfo.id = "queueInfo";
+      startMenu.appendChild(queueInfo);
+    }
+    queueInfo.innerHTML = `
+      <p style="color:#ccc; margin: 20px 0; font-size: 18px;">You are #${data.position} in the queue</p>
+      <p style="color:#999; font-size: 14px;">Waiting for a slot to open...</p>
+    `;
+
+    showMap = true;
+    updateMapView();
+  }
+
+  if (data.type === "init") {
+    console.log("✅ Player ID received:", data.id);
+    myId = data.id;
+    if (!players[myId]) {
+      players[myId] = { x: 0, y: 0 };
+    }
+    // If player was queued, restore inputs for next attempt
+    const queueInfo = document.getElementById("queueInfo");
+    if (queueInfo) {
+      queueInfo.remove();
+      document.querySelectorAll("#startMenu input").forEach(el => el.style.display = "block");
+      document.querySelectorAll("#startMenu button").forEach(el => el.style.display = "block");
+    }
+  }
+
+  if (data.type === "error") {
+    console.error("Server error:", data.message);
+    alert("Error: " + data.message);
+  }
+
   if (data.type === "state") {
     const serverPlayers = data.players;
     const serverBullets = data.bullets;
     const serverOrbs = data.orbs || {};
-    
-    // Store last server state for reconciliation
-    lastServerState = { players: { ...serverPlayers }, bullets: { ...serverBullets }, orbs: { ...serverOrbs } };
-    
+
+    if (!window.lastStateLog) window.lastStateLog = 0;
+    if (Date.now() - window.lastStateLog > 1000) {
+      console.log("🎮 State received - players:", Object.keys(serverPlayers).length);
+      window.lastStateLog = Date.now();
+    }
+
+    // Update leaderboard
+    if (data.leaderboard) {
+      leaderboard = data.leaderboard;
+    }
+
     // Reconcile player position
-    if (myId && serverPlayers[myId] && players[myId]) {
+    if (myId && serverPlayers[myId]) {
+      if (!players[myId]) {
+        players[myId] = {};
+      }
+
       const serverPlayer = serverPlayers[myId];
       const clientPlayer = players[myId];
-      
-      // If server position differs significantly from client prediction, snap to server
-      const dx = serverPlayer.x - clientPlayer.x;
-      const dy = serverPlayer.y - clientPlayer.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      if (dist > 50) { // If difference is too large, snap to server position
-        clientPlayer.x = serverPlayer.x;
-        clientPlayer.y = serverPlayer.y;
+
+      const oldX = clientPlayer.x;
+      const oldY = clientPlayer.y;
+
+      // Copy all stats from server but preserve client-predicted position
+      const { x: serverX, y: serverY, ...serverRest } = serverPlayer;
+      Object.assign(clientPlayer, serverRest);
+
+      // Only snap position if prediction is too far off (> 100 units)
+      if (oldX !== undefined && oldY !== undefined) {
+        const dx = serverX - oldX;
+        const dy = serverY - oldY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 100) {
+          clientPlayer.x = serverX;
+          clientPlayer.y = serverY;
+        }
+      } else {
+        clientPlayer.x = serverX;
+        clientPlayer.y = serverY;
       }
-      
-      // Update other server-controlled properties
-      clientPlayer.health = serverPlayer.health;
-      clientPlayer.xp = serverPlayer.xp;
-      clientPlayer.level = serverPlayer.level;
-      clientPlayer.CanUpgrade = serverPlayer.CanUpgrade;
-      clientPlayer.alive = serverPlayer.alive;
-      clientPlayer.upgradeCounts = serverPlayer.upgradeCounts || {};
     }
-    
+
     // Update other players and bullets/orbs directly
     for (let id in serverPlayers) {
       if (id !== myId) {
         players[id] = serverPlayers[id];
       }
     }
-    
+
     bullets = serverBullets;
     orbs = serverOrbs;
 
@@ -201,8 +280,7 @@ socket.onmessage = e => {
         startMenu.classList.remove("show");
         showMap = false;
         mapOverlay.style.display = "none";
-        // Fade-in removed - canvas renders immediately
-        
+
         // Set target camera to follow player
         targetCamera.x = me.x - canvas.width / 2;
         targetCamera.y = me.y - canvas.height / 2;
@@ -228,10 +306,16 @@ socket.onmessage = e => {
   }
 };
 
+function sendUpgrade(stat, multiplier = 1) {
+  socket.send(JSON.stringify({ type: "upgrade", stat, multiplier }));
+}
+
 window.addEventListener("mousemove", e => {
   mouse.x = e.clientX;
   mouse.y = e.clientY;
-});window.addEventListener("keydown", e => {
+});
+
+window.addEventListener("keydown", e => {
   keys[e.key] = true;
   if (upgradePanel.style.display !== "none") {
     const stats = ["damage", "power", "bulletSpeed", "fireRate", "bodyDamage", "regenerationRate", "speed", "maxHealth"];
@@ -241,45 +325,150 @@ window.addEventListener("mousemove", e => {
     }
   }
 });
+
 window.addEventListener("keyup", e => keys[e.key] = false);
+
 window.addEventListener("mousedown", () => {
   if (!myId || !players[myId] || !players[myId].alive) return;
   socket.send(JSON.stringify({ type: "shoot" }));
 });
 
-function sendInput() {
+function sendInput(delta = 16) {
   if (!myId || !players[myId] || !players[myId].alive) return;
 
-  const dx = mouse.x - (canvas.width * 0.5);
-  const dy = mouse.y - (canvas.height * 0.5);
-  const angle = Math.atan2(dy, dx);
-  const input = { angle, up: keys["w"], timestamp: Date.now() };
-  
-  // Add to pending inputs for reconciliation
-  pendingInputs.push(input);
-  
+  // Aim angle from mouse (PC) or joystick direction (mobile)
+  let angle;
+  if (joystick.active && (joystick.vx !== 0 || joystick.vy !== 0)) {
+    angle = Math.atan2(joystick.vy, joystick.vx);
+  } else {
+    const mdx = mouse.x - (canvas.width * 0.5);
+    const mdy = mouse.y - (canvas.height * 0.5);
+    angle = Math.atan2(mdy, mdx);
+  }
+
+  // WASD movement vector
+  let vx = 0;
+  let vy = 0;
+  if (joystick.active) {
+    vx = joystick.vx;
+    vy = joystick.vy;
+  } else {
+    if (keys["w"] || keys["W"] || keys["ArrowUp"])    vy -= 1;
+    if (keys["s"] || keys["S"] || keys["ArrowDown"])  vy += 1;
+    if (keys["a"] || keys["A"] || keys["ArrowLeft"])  vx -= 1;
+    if (keys["d"] || keys["D"] || keys["ArrowRight"]) vx += 1;
+  }
+
+  // Normalize diagonal movement
+  const len = Math.sqrt(vx * vx + vy * vy);
+  const nvx = len > 0 ? vx / len : 0;
+  const nvy = len > 0 ? vy / len : 0;
+
   // Client-side prediction
   if (players[myId]) {
     players[myId].angle = angle;
-    if (input.up) {
-      const delta = 16; // Assume 60fps
-      players[myId].x += Math.cos(angle) * players[myId].speed * (delta / 16);
-      players[myId].y += Math.sin(angle) * players[myId].speed * (delta / 16);
-      
-      // Keep within bounds
+    if (nvx !== 0 || nvy !== 0) {
+      players[myId].x += nvx * players[myId].speed * (delta / 16);
+      players[myId].y += nvy * players[myId].speed * (delta / 16);
       players[myId].x = Math.max(0, Math.min(WORLD_SIZE, players[myId].x));
       players[myId].y = Math.max(0, Math.min(WORLD_SIZE, players[myId].y));
     }
   }
 
-  socket.send(JSON.stringify({ type: "input", ...input }));
+  // Throttle network sends to ~20/sec to reduce bandwidth
+  const now = Date.now();
+  if (now - lastInputSent >= 50) {
+    socket.send(JSON.stringify({ type: "input", angle, vx: nvx, vy: nvy, timestamp: now }));
+    lastInputSent = now;
+  }
 }
 
+// --- Mobile joystick ---
+const joystickBase = document.getElementById("joystickBase");
+const joystickKnob = document.getElementById("joystickKnob");
+const shootBtn    = document.getElementById("shootBtn");
+
+window.addEventListener("touchstart", () => {
+  document.getElementById("joystickArea").style.display = "block";
+  shootBtn.style.display = "block";
+}, { once: true });
+
+joystickBase.addEventListener("touchstart", e => {
+  e.preventDefault();
+  const touch = e.changedTouches[0];
+  joystick.active = true;
+  joystick.touchId = touch.identifier;
+  const rect = joystickBase.getBoundingClientRect();
+  joystick.baseX = rect.left + rect.width / 2;
+  joystick.baseY = rect.top  + rect.height / 2;
+}, { passive: false });
+
+joystickBase.addEventListener("touchmove", e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joystick.touchId) continue;
+    const dx = t.clientX - joystick.baseX;
+    const dy = t.clientY - joystick.baseY;
+    const maxR = 45;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const clampedDist = Math.min(dist, maxR);
+    const a = Math.atan2(dy, dx);
+    joystick.vx = Math.cos(a) * (clampedDist / maxR);
+    joystick.vy = Math.sin(a) * (clampedDist / maxR);
+    const kx = Math.cos(a) * clampedDist;
+    const ky = Math.sin(a) * clampedDist;
+    joystickKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+  }
+}, { passive: false });
+
+joystickBase.addEventListener("touchend", e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joystick.touchId) continue;
+    joystick.active = false;
+    joystick.vx = 0;
+    joystick.vy = 0;
+    joystickKnob.style.transform = "translate(-50%, -50%)";
+  }
+});
+
+shootBtn.addEventListener("touchstart", e => {
+  e.preventDefault();
+  if (!myId || !players[myId] || !players[myId].alive) return;
+  socket.send(JSON.stringify({ type: "shoot" }));
+}, { passive: false });
+
 function draw() {
-  if (!myId || !players[myId]) return;
+  if (!myId) {
+    // Show loading screen
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Connecting to server...", canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  if (!players[myId]) {
+    // Game waiting for state
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#fff";
+    ctx.font = "24px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("Loading game...", canvas.width / 2, canvas.height / 2);
+    return;
+  }
+
+  const me = players[myId];
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  const me = players[myId];
+  
+  // Paint background
+  ctx.fillStyle = "#111";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
   
   // Update camera with lerping
   if (!showMap) {
@@ -297,8 +486,10 @@ function draw() {
     const p = players[id];
     if (!p.alive) continue;
 
+    const radius = 20 + Math.sqrt(p.xp || 0) * 0.3;
+
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 20, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
     ctx.fillStyle = p.color;
     ctx.fill();
 
@@ -311,13 +502,13 @@ function draw() {
     ctx.textAlign = "center";
     ctx.strokeStyle = (id === myId ? p.color : "#ff0000");
     ctx.lineWidth = 2;
-    ctx.strokeText(p.name, p.x, p.y - 30);
-    ctx.fillText(p.name, p.x, p.y - 30);
+    ctx.strokeText(p.name, p.x, p.y - radius - 10);
+    ctx.fillText(p.name, p.x, p.y - radius - 10);
 
     ctx.fillStyle = "#555";
-    ctx.fillRect(p.x - 20, p.y - 25, 40, 5);
+    ctx.fillRect(p.x - radius, p.y - radius - 20, radius * 2, 5);
     ctx.fillStyle = "#fff";
-    ctx.fillRect(p.x - 20, p.y - 25, 40 * (p.health / p.maxHealth), 5);
+    ctx.fillRect(p.x - radius, p.y - radius - 20, radius * 2 * (p.health / p.maxHealth), 5);
   }
 
   bullets.forEach(b => {
@@ -339,17 +530,56 @@ function draw() {
   // Render orbs
   for (let id in orbs) {
     const orb = orbs[id];
+    const orbRadius = 30 * orb.size;
     ctx.beginPath();
-    ctx.arc(orb.x, orb.y, 10 * orb.size, 0, Math.PI * 2);
+    ctx.arc(orb.x, orb.y, orbRadius, 0, Math.PI * 2);
     ctx.fillStyle = orb.color;
     ctx.fill();
     ctx.strokeStyle = "#fff";
     ctx.lineWidth = 2;
     ctx.stroke();
+
+    // Draw health bar above orb
+    if (orb.health && orb.maxHealth) {
+      const barWidth = orbRadius * 2;
+      const barHeight = 4;
+      const healthPercent = orb.health / orb.maxHealth;
+
+      // Background bar
+      ctx.fillStyle = "#555";
+      ctx.fillRect(orb.x - barWidth / 2, orb.y - orbRadius - 10, barWidth, barHeight);
+
+      // Health bar
+      ctx.fillStyle = healthPercent > 0.5 ? "#00ff00" : healthPercent > 0.25 ? "#ffff00" : "#ff0000";
+      ctx.fillRect(orb.x - barWidth / 2, orb.y - orbRadius - 10, barWidth * healthPercent, barHeight);
+
+      // Border
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(orb.x - barWidth / 2, orb.y - orbRadius - 10, barWidth, barHeight);
+    }
   }
 
   ctx.restore();
   drawMinimap(ctx, players, myId, WORLD_SIZE);
+
+  // Draw leaderboard
+  ctx.save();
+  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+  ctx.fillRect(canvas.width - 250, 10, 240, Math.min(leaderboard.length * 20 + 30, 250));
+
+  ctx.fillStyle = "#fff";
+  ctx.font = "bold 16px sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText("TOP PLAYERS", canvas.width - 20, 30);
+
+  ctx.font = "12px sans-serif";
+  leaderboard.forEach((player, idx) => {
+    const y = 50 + idx * 18;
+    ctx.fillStyle = idx === 0 ? "#ffd700" : idx === 1 ? "#c0c0c0" : idx === 2 ? "#cd7f32" : "#ccc";
+    ctx.fillText(`${idx + 1}. ${player.name} (Lvl ${player.level})`, canvas.width - 20, y);
+  });
+  ctx.restore();
 
   const p = players[myId];
   if (p) {
@@ -358,7 +588,7 @@ function draw() {
     const x = canvas.width / 2 - barWidth / 2;
     const y = canvas.height - barHeight - 20;
     const xpPercent = (p.xp % 100) / 100;
-    const UpgradeAmount =  p.CanUpgrade
+    const UpgradeAmount = p.CanUpgrade
     //bar
     ctx.fillStyle = "#555";
     ctx.fillRect(x, y, barWidth, barHeight);
@@ -389,10 +619,15 @@ function draw() {
   }
 }
 
-function loop() {
-  sendInput();
+let lastFrameTime = 0;
+function loop(timestamp) {
+  const delta = lastFrameTime ? Math.min(timestamp - lastFrameTime, 50) : 16;
+  lastFrameTime = timestamp;
+  sendInput(delta);
   draw();
   if (showMap) updateMapView();
+  requestAnimationFrame(loop);
 }
 
-setInterval(loop, 1000 / 15);
+console.log("🎮 Game loop starting...");
+requestAnimationFrame(loop);
