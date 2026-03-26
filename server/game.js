@@ -122,12 +122,14 @@ class Game {
     p.lastShot = now;
 
     this.bullets.push({
-      x: p.x + Math.cos(p.angle) * 25,
-      y: p.y + Math.sin(p.angle) * 25,
-      vx: Math.cos(p.angle) * p.bulletSpeed,
-      vy: Math.sin(p.angle) * p.bulletSpeed,
+      startX: p.x + Math.cos(p.angle) * 25,
+      startY: p.y + Math.sin(p.angle) * 25,
+      angle: p.angle,
+      speed: p.bulletSpeed,
+      startTime: now,
       owner: id,
-      life: p.power
+      power: p.power,
+      damage: p.damage
     });
   }
   updateLevel(id) {
@@ -168,43 +170,12 @@ class Game {
       p.upgradeCounts[stat] += multiplier;
     }
   }
-  addOrbs() {
-    while (Object.keys(this.Orbs).length < maxOrbs) {
-      const id = Math.random().toString(36).slice(2);
-      this.Orbs[id] = {
-        x: Math.random() * WORLD_SIZE,
-        y: Math.random() * WORLD_SIZE,
-        color: `hsl(${Math.random() * 360}, 100%, 50%)`
-      };
-    }
-    
-    
-
-
-  }
-
-  update(delta) {
-    // Update bullets
-    this.bullets.forEach(b => {
-      b.x += b.vx;
-      b.y += b.vy;
-      b.life--;
-    });
-    
-    this.bullets = this.bullets.filter(b => b.life > 0);
-    // Regenerate health
-    for (let id in this.players) {
-      const p = this.players[id];
-      if (p.alive && p.health < p.maxHealth) {
-        p.health = Math.min(p.maxHealth, p.health + p.regenerationRate);
-      }
-    }
-    // Body damage
+  checkBodyCollisions() {
     for (let id in this.players) {
       const p = this.players[id];
       if (!p.alive) continue;
 
-      p.bodyCooldown -= delta;
+      p.bodyCooldown -= 100; // Since we check every 100ms
 
       for (let otherId in this.players) {
         if (id === otherId) continue;
@@ -218,7 +189,7 @@ class Game {
         if (dist < 40) {
           if (p.bodyCooldown <= 0) {
             op.health -= p.bodyDamage;
-            p.bodyCooldown = 500; 
+            p.bodyCooldown = 500;
           }
 
           if (op.bodyCooldown <= 0) {
@@ -226,43 +197,77 @@ class Game {
             op.bodyCooldown = 500;
           }
 
-      // Death check
-      if (p.health <= 0 && p.alive) {
-        op.xp += 20;
-        this.updateLevel(op.id);
-        p.alive = false;
-      }
+          // Death check
+          if (p.health <= 0 && p.alive) {
+            op.xp += 20;
+            this.updateLevel(op.id);
+            p.alive = false;
+          }
 
-      if (op.health <= 0 && op.alive) {
-        p.xp += 20;
-        this.updateLevel(p.id);
-        op.alive = false;
+          if (op.health <= 0 && op.alive) {
+            p.xp += 20;
+            this.updateLevel(p.id);
+            op.alive = false;
+          }
+        }
       }
     }
   }
-}
+
+  update(delta) {
+    const now = Date.now();
+    
+    // Remove old bullets (after 5 seconds)
+    this.bullets = this.bullets.filter(b => now - b.startTime < 5000);
+    
+    // Regenerate health
+    for (let id in this.players) {
+      const p = this.players[id];
+      if (p.alive && p.health < p.maxHealth) {
+        p.health = Math.min(p.maxHealth, p.health + p.regenerationRate);
+      }
+    }
+    // Body damage (only check every 100ms to reduce load)
+    if (now - (this.lastBodyCheck || 0) > 100) {
+      this.lastBodyCheck = now;
+      this.checkBodyCollisions();
+    }
     // Bullet collisions
     this.bullets.forEach(b => {
+      // Calculate current bullet position
+      const age = now - b.startTime;
+      const distance = (age / 1000) * b.speed;
+      const x = b.startX + Math.cos(b.angle) * distance;
+      const y = b.startY + Math.sin(b.angle) * distance;
+      
+      // Check if bullet is still alive (within world bounds)
+      if (x < 0 || x > WORLD_SIZE || y < 0 || y > WORLD_SIZE) return;
+      
       for (let id in this.players) {
         const p = this.players[id];
         if (!p.alive || id === b.owner) continue;
 
-        const dx = p.x - b.x;
-        const dy = p.y - b.y;
+        const dx = p.x - x;
+        const dy = p.y - y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < 20) {
-          p.health -= b.owner && this.players[b.owner] ? this.players[b.owner].damage : 1;
+          p.health -= b.damage;
           if (p.health <= 0) {
-              if (b.owner && this.players[b.owner]) {
-                this.players[b.owner].xp += 20;
-              }
-            this.updateLevel(b.owner);
+            if (b.owner && this.players[b.owner]) {
+              this.players[b.owner].xp += 20;
+              this.updateLevel(b.owner);
+            }
             p.alive = false;
           }
+          // Remove bullet after hit
+          b.startTime = 0;
         }
       }
     });
+    
+    // Remove hit bullets
+    this.bullets = this.bullets.filter(b => b.startTime > 0);
   }
 }
 

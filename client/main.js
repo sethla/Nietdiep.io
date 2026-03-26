@@ -146,10 +146,19 @@ function draw() {
   }
 
   bullets.forEach(b => {
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, 5, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
+    const now = Date.now();
+    const age = now - b.startTime;
+    const distance = (age / 1000) * b.speed;
+    const x = b.startX + Math.cos(b.angle) * distance;
+    const y = b.startY + Math.sin(b.angle) * distance;
+    
+    // Only render if within world bounds
+    if (x >= 0 && x <= WORLD_SIZE && y >= 0 && y <= WORLD_SIZE) {
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#fff";
+      ctx.fill();
+    }
   });
 
   ctx.restore();

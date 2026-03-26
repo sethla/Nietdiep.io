@@ -58,7 +58,7 @@ wss.on("connection", ws => {
   });
 });
 
-// 60 FPS game loop
+// 20 FPS game loop
 let lastTime = Date.now();
 setInterval(() => {
   const now = Date.now();
@@ -81,7 +81,7 @@ setInterval(() => {
   wss.clients.forEach(c => {
     if (c.readyState === WebSocket.OPEN) c.send(state);
   });
-}, 1000 / 30);
+}, 1000 / 20);
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
