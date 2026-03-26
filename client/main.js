@@ -18,22 +18,10 @@ window.addEventListener('resize', () => {
 const wsProtocol = location.protocol === "https:" ? "wss:" : "ws:";
 const socket = new WebSocket(wsProtocol + "//" + location.host);
 
-window.addEventListener("error", event => {
-  const isGTMResource = (event.filename && event.filename.includes("googletagmanager.com")) ||
-    (event.target && event.target.src && event.target.src.includes("googletagmanager.com"));
-
-  if (isGTMResource) {
-    event.preventDefault();
-    return true;
-  }
-});
-
-window.addEventListener("unhandledrejection", event => {
-  if (event.reason && typeof event.reason === "string" && event.reason.includes("googletagmanager.com")) {
-    event.preventDefault();
-    return true;
-  }
-});
+// Fade-in animation
+let fadeInAlpha = 0;
+let isFadingIn = false;
+let fadeInStartTime = 0;
 
 let myId = null;
 let players = {};
@@ -47,6 +35,12 @@ let cameraLerpSpeed = 0.05;
 let showMap = false;
 let lastServerState = null;
 let pendingInputs = [];
+
+function startFadeIn() {
+  isFadingIn = true;
+  fadeInStartTime = Date.now();
+  fadeInAlpha = 0;
+}
 
 const startMenu = document.getElementById("startMenu");
 const startBtn = document.getElementById("startBtn");
@@ -207,6 +201,7 @@ socket.onmessage = e => {
         startMenu.classList.remove("show");
         showMap = false;
         mapOverlay.style.display = "none";
+        startFadeIn(); // Start fade-in animation
         
         // Set target camera to follow player
         targetCamera.x = me.x - canvas.width / 2;
@@ -376,6 +371,21 @@ function draw() {
     ctx.textAlign = "center";
     ctx.font = "16px sans-serif";
     ctx.fillText(`Level ${p.level} | XP: ${p.xp}`, canvas.width / 2, y + barHeight - 5);
+  }
+  
+  // Render fade-in overlay
+  if (isFadingIn) {
+    const fadeInDuration = 1000; // 1 second fade-in
+    const elapsed = Date.now() - fadeInStartTime;
+    fadeInAlpha = Math.max(0, 1 - (elapsed / fadeInDuration));
+    
+    if (fadeInAlpha > 0) {
+      ctx.fillStyle = `rgba(0, 0, 0, ${fadeInAlpha})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+      isFadingIn = false;
+      fadeInAlpha = 0;
+    }
   }
 }
 
