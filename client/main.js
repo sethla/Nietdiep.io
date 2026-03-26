@@ -39,7 +39,7 @@ let pendingInputs = [];
 function startFadeIn() {
   isFadingIn = true;
   fadeInStartTime = Date.now();
-  fadeInAlpha = 0;
+  fadeInAlpha = 0.3; // Start slightly transparent so game is visible
 }
 
 const startMenu = document.getElementById("startMenu");
@@ -201,7 +201,7 @@ socket.onmessage = e => {
         startMenu.classList.remove("show");
         showMap = false;
         mapOverlay.style.display = "none";
-        startFadeIn(); // Start fade-in animation
+        // Fade-in removed - canvas renders immediately
         
         // Set target camera to follow player
         targetCamera.x = me.x - canvas.width / 2;
@@ -375,9 +375,9 @@ function draw() {
   
   // Render fade-in overlay
   if (isFadingIn) {
-    const fadeInDuration = 1000; // 1 second fade-in
+    const fadeInDuration = 500; // 0.5 second fade-in (faster)
     const elapsed = Date.now() - fadeInStartTime;
-    fadeInAlpha = Math.max(0, 1 - (elapsed / fadeInDuration));
+    fadeInAlpha = Math.max(0, 0.5 - (elapsed / fadeInDuration * 0.5)); // Fade from 0.5 to 0
     
     if (fadeInAlpha > 0) {
       ctx.fillStyle = `rgba(0, 0, 0, ${fadeInAlpha})`;
