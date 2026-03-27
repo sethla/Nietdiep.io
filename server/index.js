@@ -20,6 +20,11 @@ const server = http.createServer((req, res) => {
       let contentType = "text/html";
       if (filePath.endsWith(".js")) contentType = "application/javascript";
       if (filePath.endsWith(".css")) contentType = "text/css";
+      if (filePath.endsWith(".png")) contentType = "image/png";
+      if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) contentType = "image/jpeg";
+      if (filePath.endsWith(".gif")) contentType = "image/gif";
+      if (filePath.endsWith(".svg")) contentType = "image/svg+xml";
+      if (filePath.endsWith(".md")) contentType = "text/markdown";
 
       res.writeHead(200, { "Content-Type": contentType });
       res.end(data);
@@ -50,16 +55,19 @@ wss.on("connection", ws => {
           ws.send(JSON.stringify({ type: "error", message: "Invalid color" }));
           return;
         }
+        if (!data.skin || typeof data.skin !== 'string') {
+          data.skin = 'default';
+        }
 
         // Check player limit
         if (!game.canAddPlayer()) {
-          game.addToQueue(id, data.name, data.color);
+          game.addToQueue(id, data.name, data.color, data.skin);
           const position = game.getQueuePosition(id);
           ws.send(JSON.stringify({ type: "queued", position }));
           return;
         }
 
-        game.addPlayer(id, data.name, data.color);
+        game.addPlayer(id, data.name, data.color, data.skin);
         ws.send(JSON.stringify({ type: "init", id }));
       }
 

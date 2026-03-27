@@ -11,16 +11,17 @@ class Game {
     this.Orbs = {};
     this.players = {};
     this.bullets = [];
-    this.queue = []; // Array of {id, name, color}
+    this.queue = []; // Array of {id, name, color, skin}
   }
   
-  addPlayer(id, name, color) {
-    const adminHash = crypto.createHash('sha256').update('adminpassword').digest('hex'); 
-    if (crypto.createHash('sha256').update(name).digest('hex') === adminHash) 
+  addPlayer(id, name, color, skin = 'default') {
+    const adminHash = crypto.createHash('sha256').update('adminpassword').digest('hex');
+    if (crypto.createHash('sha256').update(name).digest('hex') === adminHash)
       this.players[id] = {
       id,
       name: "NILL",
       color: color || "#4caf50",
+      skin: skin,
       x: Math.random() * WORLD_SIZE,
       y: Math.random() * WORLD_SIZE,
       angle: 5,
@@ -49,6 +50,7 @@ class Game {
       id,
       name: name || "Player",
       color: color || "#4caf50",
+      skin: skin,
       x: Math.random() * WORLD_SIZE,
       y: Math.random() * WORLD_SIZE,
       angle: 0,
@@ -372,9 +374,9 @@ class Game {
     return this.queue.findIndex(entry => entry.id === id) + 1;
   }
 
-  addToQueue(id, name, color) {
+  addToQueue(id, name, color, skin = 'default') {
     if (!this.queue.find(entry => entry.id === id)) {
-      this.queue.push({ id, name, color });
+      this.queue.push({ id, name, color, skin });
     }
   }
 
@@ -388,7 +390,7 @@ class Game {
   processQueue() {
     while (this.queue.length > 0 && this.canAddPlayer()) {
       const entry = this.queue.shift();
-      this.addPlayer(entry.id, entry.name, entry.color);
+      this.addPlayer(entry.id, entry.name, entry.color, entry.skin);
       return entry.id;
     }
     return null;

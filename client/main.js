@@ -1,4 +1,5 @@
 import { drawGrid, drawMinimap, drawMapBorder } from "./render.js";
+import { loadSkins, getSkinImage, setSkin, getSelectedSkin, createShopPage, updateCoins, openShop, closeShop } from "./skins.js";
 
 const WORLD_SIZE = 5000;
 const canvas = document.getElementById("game");
@@ -52,6 +53,9 @@ let lastInputSent = 0;
 let joystick = { active: false, touchId: null, vx: 0, vy: 0 };
 let leaderboard = [];
 let queuePosition = 0;
+let lastUpdateTime = 0;
+let playerPrevPos = {}; // Track previous positions for interpolation
+let playerLastLevel = 0; // Track level for coin rewards
 
 function startFadeIn() {
   isFadingIn = true;
@@ -61,12 +65,21 @@ function startFadeIn() {
 
 const startMenu = document.getElementById("startMenu");
 const startBtn = document.getElementById("startBtn");
+const shopBtn = document.getElementById("shopBtn");
 const nameInput = document.getElementById("nameInput");
 const colorInput = document.getElementById("colorInput");
 const respawnMenu = document.getElementById("respawnMenu");
 const respawnBtn = document.getElementById("respawnBtn");
+const respawnShopBtn = document.getElementById("respawnShopBtn");
 const upgradePanel = document.getElementById("upgradePanel");
 const upgradePointsText = document.getElementById("upgradePoints");
+
+console.log("🔍 Buttons found:", { startBtn, shopBtn, respawnBtn, respawnShopBtn });
+
+// Initialize skins
+(async () => {
+  await loadSkins();
+})();
 
 function updateMapView() {
   if (!showMap) return;
@@ -144,12 +157,33 @@ upgradePanel.querySelectorAll("button[data-stat]").forEach(btn => {
 startBtn.onclick = () => {
   const name = nameInput.value || "Player";
   const color = colorInput.value || "#4caf50";
+  const skin = getSelectedSkin();
   startMenu.style.display = "none";
   startMenu.classList.remove("show");
   showMap = false;
   mapOverlay.style.display = "none";
-  socket.send(JSON.stringify({ type: "setup", name, color }));
+  socket.send(JSON.stringify({ type: "setup", name, color, skin }));
 };
+
+if (shopBtn) {
+  console.log("✅ attaching shop button listener");
+  shopBtn.onclick = () => {
+    console.log("🛍️ shop button clicked");
+    openShop();
+  };
+} else {
+  console.log("❌ shopBtn not found!");
+}
+
+if (respawnShopBtn) {
+  console.log("✅ attaching respawn shop button listener");
+  respawnShopBtn.onclick = () => {
+    console.log("🛍️ respawn shop button clicked");
+    openShop();
+  };
+} else {
+  console.log("❌ respawnShopBtn not found!");
+}
 
 respawnBtn.onclick = () => socket.send(JSON.stringify({ type: "respawn" }));
 
@@ -225,7 +259,10 @@ socket.onmessage = e => {
       leaderboard = data.leaderboard;
     }
 
-    // Reconcile player position
+    // Store server time for interpolation
+    const serverTime = Date.now();
+
+    // Reconcile player position with gentle correction
     if (myId && serverPlayers[myId]) {
       if (!players[myId]) {
         players[myId] = {};
@@ -234,32 +271,55 @@ socket.onmessage = e => {
       const serverPlayer = serverPlayers[myId];
       const clientPlayer = players[myId];
 
-      const oldX = clientPlayer.x;
-      const oldY = clientPlayer.y;
+      // Check for level up and award coins
+      if (clientPlayer.level && serverPlayer.level > clientPlayer.level) {
+        const oldLevel = clientPlayer.level;
+        const newLevel = serverPlayer.level;
 
-      // Copy all stats from server but preserve client-predicted position
-      const { x: serverX, y: serverY, ...serverRest } = serverPlayer;
-      Object.assign(clientPlayer, serverRest);
-
-      // Only snap position if prediction is too far off (> 100 units)
-      if (oldX !== undefined && oldY !== undefined) {
-        const dx = serverX - oldX;
-        const dy = serverY - oldY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > 100) {
-          clientPlayer.x = serverX;
-          clientPlayer.y = serverY;
+        // Calculate coins: each level gives coins equal to the level number
+        // Level 2 = 2 coins, Level 3 = 3 coins, etc.
+        let coinsEarned = 0;
+        for (let i = oldLevel + 1; i <= newLevel; i++) {
+          coinsEarned += i;
         }
-      } else {
-        clientPlayer.x = serverX;
-        clientPlayer.y = serverY;
+
+        updateCoins((players[myId]?.coinage || 0) + coinsEarned);
+        if (!players[myId]) players[myId] = {};
+        players[myId].coinage = (players[myId].coinage || 0) + coinsEarned;
+
+        // Refresh shop if it's open
+        const shopPage = document.getElementById('shopPage');
+        if (shopPage) {
+          const newShop = createShopPage();
+          shopPage.replaceWith(newShop);
+        }
       }
+
+      // Copy all server data first
+      Object.assign(clientPlayer, serverPlayer);
+
+      // Don't apply any special position handling - trust the server
+      // Client prediction happens in sendInput() which runs at 60fps
+      // and server updates at 15fps, so client prediction keeps things smooth
     }
 
-    // Update other players and bullets/orbs directly
+    // Update other players with interpolation data
     for (let id in serverPlayers) {
       if (id !== myId) {
-        players[id] = serverPlayers[id];
+        const serverPlayer = serverPlayers[id];
+
+        // Store previous position if this player exists
+        if (players[id]) {
+          if (!playerPrevPos[id]) {
+            playerPrevPos[id] = {};
+          }
+          playerPrevPos[id].x = players[id].x;
+          playerPrevPos[id].y = players[id].y;
+          playerPrevPos[id].time = serverTime;
+        }
+
+        // Update with new server data
+        players[id] = serverPlayer;
       }
     }
 
@@ -364,7 +424,7 @@ function sendInput(delta = 16) {
   const nvx = len > 0 ? vx / len : 0;
   const nvy = len > 0 ? vy / len : 0;
 
-  // Client-side prediction
+  // Client-side prediction with smoother movement
   if (players[myId]) {
     players[myId].angle = angle;
     if (nvx !== 0 || nvy !== 0) {
@@ -381,6 +441,34 @@ function sendInput(delta = 16) {
     socket.send(JSON.stringify({ type: "input", angle, vx: nvx, vy: nvy, timestamp: now }));
     lastInputSent = now;
   }
+}
+
+// Helper function to get smooth render position for other players
+function getPlayerRenderPos(id) {
+  const p = players[id];
+  if (!id || !p) return { x: p?.x || 0, y: p?.y || 0 };
+
+  // My own player - no interpolation needed (client prediction handles it)
+  if (id === myId) {
+    return { x: p.x, y: p.y };
+  }
+
+  // Other players - interpolate between previous and current position
+  const prevPos = playerPrevPos[id];
+  if (!prevPos) {
+    return { x: p.x, y: p.y };
+  }
+
+  // Interpolate over approximately 60ms (one frame at 60fps)
+  const now = Date.now();
+  const elapsed = now - prevPos.time;
+  const interpDuration = 66; // ~15fps update rate, spread over frame time
+  const progress = Math.min(1, elapsed / interpDuration);
+
+  const x = prevPos.x + (p.x - prevPos.x) * progress;
+  const y = prevPos.y + (p.y - prevPos.y) * progress;
+
+  return { x, y };
 }
 
 // --- Mobile joystick ---
@@ -486,15 +574,30 @@ function draw() {
     const p = players[id];
     if (!p.alive) continue;
 
+    // Get interpolated position for smooth rendering
+    const pos = getPlayerRenderPos(id);
+
     const radius = 20 + Math.sqrt(p.xp || 0) * 0.3;
 
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
-    ctx.fillStyle = p.color;
-    ctx.fill();
+    // Try to render skin if available
+    const skinImage = p.skin ? getSkinImage(p.skin) : null;
+    if (skinImage) {
+      ctx.save();
+      ctx.translate(pos.x, pos.y);
+      ctx.drawImage(skinImage, -radius, -radius, radius * 2, radius * 2);
+      ctx.restore();
+    } else {
+      // Fallback to colored circle
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    }
 
     ctx.strokeStyle = (id === myId ? p.color : "#ff0000");
     ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = "#fff";
@@ -502,13 +605,13 @@ function draw() {
     ctx.textAlign = "center";
     ctx.strokeStyle = (id === myId ? p.color : "#ff0000");
     ctx.lineWidth = 2;
-    ctx.strokeText(p.name, p.x, p.y - radius - 10);
-    ctx.fillText(p.name, p.x, p.y - radius - 10);
+    ctx.strokeText(p.name, pos.x, pos.y - radius - 10);
+    ctx.fillText(p.name, pos.x, pos.y - radius - 10);
 
     ctx.fillStyle = "#555";
-    ctx.fillRect(p.x - radius, p.y - radius - 20, radius * 2, 5);
+    ctx.fillRect(pos.x - radius, pos.y - radius - 20, radius * 2, 5);
     ctx.fillStyle = "#fff";
-    ctx.fillRect(p.x - radius, p.y - radius - 20, radius * 2 * (p.health / p.maxHealth), 5);
+    ctx.fillRect(pos.x - radius, pos.y - radius - 20, radius * 2 * (p.health / p.maxHealth), 5);
   }
 
   bullets.forEach(b => {
