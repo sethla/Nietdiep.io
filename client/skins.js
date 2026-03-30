@@ -9,9 +9,16 @@ const AVAILABLE_SKINS = [
 let loadedSkinImages = {};
 let selectedSkin = localStorage.getItem('selectedSkin') || 'default';
 let purchasedSkins = new Set(['default']);
-let customSkinUrl = null;
+let customSkinUrl = localStorage.getItem('customSkinUrl') || null;
 let playerCoins = 0;
 let onCoinsChanged = null;
+let onSkinChanged = null;
+const customSkinCache = {};
+const customSkinLoading = new Set();
+
+if (customSkinUrl) {
+  purchasedSkins.add('custom');
+}
 
 // Code redemption system
 const validCodes = {
@@ -20,6 +27,44 @@ const validCodes = {
   'VIP200': 200,
 };
 let usedCodes = new Set();
+
+const SUPPORTED_CUSTOM_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'];
+
+function isSupportedCustomSkinUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+
+  if (url.startsWith('data:image/')) {
+    return true;
+  }
+
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+
+    const path = parsed.pathname.toLowerCase();
+    const ext = path.includes('.') ? path.split('.').pop() : '';
+    return SUPPORTED_CUSTOM_EXTENSIONS.includes(ext);
+  } catch {
+    return false;
+  }
+}
+
+async function preloadCustomSkin(url) {
+  if (!url) return null;
+  if (customSkinCache[url]) return customSkinCache[url];
+
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = url;
+
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+  });
+
+  customSkinCache[url] = img;
+  return img;
+}
 
 // Load all available skins
 async function loadSkins() {
@@ -41,7 +86,25 @@ async function loadSkins() {
   }
 }
 
-function getSkinImage(skinId) {
+function getSkinImage(skinId, playerCustomSkinUrl = null) {
+  if (skinId === 'custom') {
+    const resolvedCustomUrl = playerCustomSkinUrl || customSkinUrl;
+    if (!resolvedCustomUrl) return null;
+
+    if (!customSkinCache[resolvedCustomUrl] && !customSkinLoading.has(resolvedCustomUrl)) {
+      customSkinLoading.add(resolvedCustomUrl);
+      preloadCustomSkin(resolvedCustomUrl)
+        .catch(() => {
+          // keep silent to avoid noisy logs when third-party URLs fail
+        })
+        .finally(() => {
+          customSkinLoading.delete(resolvedCustomUrl);
+        });
+    }
+
+    return customSkinCache[resolvedCustomUrl] || null;
+  }
+
   return loadedSkinImages[skinId] || null;
 }
 
@@ -49,6 +112,14 @@ function setSkin(skinId) {
   if (AVAILABLE_SKINS.find(s => s.id === skinId)) {
     selectedSkin = skinId;
     localStorage.setItem('selectedSkin', skinId);
+
+    if (onSkinChanged) {
+      onSkinChanged({
+        skin: selectedSkin,
+        customSkinUrl
+      });
+    }
+
     return true;
   }
   return false;
@@ -56,6 +127,14 @@ function setSkin(skinId) {
 
 function getSelectedSkin() {
   return selectedSkin;
+}
+
+function getCustomSkinUrl() {
+  return customSkinUrl;
+}
+
+function setSkinChangedHandler(handler) {
+  onSkinChanged = typeof handler === 'function' ? handler : null;
 }
 
 function redeemCode(code) {
@@ -242,7 +321,7 @@ function createShopPage() {
 
     form.innerHTML = `
       <h2 style="color: #fff; margin: 0 0 20px 0;">Enter Custom Tank Image URL</h2>
-      <input type="url" id="urlInput" placeholder="https://example.com/tank.png" style="
+      <input type="url" id="urlInput" placeholder="https://example.com/tank.gif" style="
         width: 100%;
         padding: 12px;
         border: 1px solid rgba(255,255,255,0.3);
@@ -253,6 +332,7 @@ function createShopPage() {
         box-sizing: border-box;
         margin-bottom: 15px;
       ">
+      <p style="margin: 0 0 12px 0; color: #ccc; font-size: 12px;">Supports PNG, JPG, GIF, WEBP, SVG and AVIF.</p>
       <div style="display: flex; gap: 10px;">
         <button id="confirmUrlBtn" style="
           flex: 1;
@@ -319,16 +399,24 @@ function createShopPage() {
           const cancelBtn = modal.querySelector('#cancelUrlBtn');
           const urlInput = modal.querySelector('#urlInput');
 
-          confirmBtn.onclick = () => {
+          confirmBtn.onclick = async () => {
             const url = urlInput.value.trim();
-            if (url) {
+            if (!isSupportedCustomSkinUrl(url)) {
+              alert('Enter a valid image URL (png, jpg, gif, webp, svg, avif or data:image/*)');
+              return;
+            }
+
+            try {
+              await preloadCustomSkin(url);
               console.log("🎨 Setting custom skin URL:", url);
               customSkinUrl = url;
+              localStorage.setItem('customSkinUrl', customSkinUrl);
               buySkin(skinId);
               modal.remove();
               refreshShop();
-            } else {
-              alert('Please enter a valid URL');
+            } catch (error) {
+              console.error('❌ Failed to load custom skin URL:', error);
+              alert('Image could not be loaded from that URL. Try another link.');
             }
           };
 
@@ -483,4 +571,16 @@ function buySkin(skinId) {
   return false;
 }
 
-export { loadSkins, getSkinImage, setSkin, getSelectedSkin, AVAILABLE_SKINS, createShopPage, updateCoins, buySkin, openShop, closeShop, refreshShop, redeemCode };
+async function initializeCustomSkinCache() {
+  if (!customSkinUrl) return;
+
+  try {
+    await preloadCustomSkin(customSkinUrl);
+  } catch (error) {
+    console.warn('⚠️ Saved custom skin URL could not be loaded:', error);
+    customSkinUrl = null;
+    localStorage.removeItem('customSkinUrl');
+  }
+}
+
+export { loadSkins, getSkinImage, setSkin, getSelectedSkin, getCustomSkinUrl, setSkinChangedHandler, AVAILABLE_SKINS, createShopPage, updateCoins, buySkin, openShop, closeShop, refreshShop, redeemCode, initializeCustomSkinCache };

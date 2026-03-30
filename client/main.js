@@ -1,5 +1,5 @@
 import { drawGrid, drawMinimap, drawMapBorder } from "./render.js";
-import { loadSkins, getSkinImage, setSkin, getSelectedSkin, createShopPage, updateCoins, openShop, closeShop } from "./skins.js";
+import { loadSkins, getSkinImage, setSkin, getSelectedSkin, getCustomSkinUrl, setSkinChangedHandler, createShopPage, updateCoins, openShop, closeShop, initializeCustomSkinCache } from "./skins.js";
 
 const WORLD_SIZE = 5000;
 const canvas = document.getElementById("game");
@@ -79,7 +79,13 @@ console.log("🔍 Buttons found:", { startBtn, shopBtn, respawnBtn, respawnShopB
 // Initialize skins
 (async () => {
   await loadSkins();
+  await initializeCustomSkinCache();
 })();
+
+setSkinChangedHandler(({ skin, customSkinUrl }) => {
+  if (socket.readyState !== WebSocket.OPEN || !myId) return;
+  socket.send(JSON.stringify({ type: "skinUpdate", skin, customSkinUrl }));
+});
 
 function updateMapView() {
   if (!showMap) return;
@@ -158,11 +164,12 @@ startBtn.onclick = () => {
   const name = nameInput.value || "Player";
   const color = colorInput.value || "#4caf50";
   const skin = getSelectedSkin();
+  const customSkinUrl = getCustomSkinUrl();
   startMenu.style.display = "none";
   startMenu.classList.remove("show");
   showMap = false;
   mapOverlay.style.display = "none";
-  socket.send(JSON.stringify({ type: "setup", name, color, skin }));
+  socket.send(JSON.stringify({ type: "setup", name, color, skin, customSkinUrl }));
 };
 
 if (shopBtn) {
@@ -580,7 +587,7 @@ function draw() {
     const radius = 20 + Math.sqrt(p.xp || 0) * 0.3;
 
     // Try to render skin if available
-    const skinImage = p.skin ? getSkinImage(p.skin) : null;
+    const skinImage = p.skin ? getSkinImage(p.skin, p.customSkinUrl) : null;
     if (skinImage) {
       ctx.save();
       ctx.translate(pos.x, pos.y);

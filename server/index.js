@@ -7,6 +7,28 @@ const Game = require("./game");
 const game = new Game();
 const clients = {};
 
+const SUPPORTED_CUSTOM_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif'];
+
+function isValidCustomSkinUrl(customSkinUrl) {
+  if (customSkinUrl == null || customSkinUrl === '') return true;
+  if (typeof customSkinUrl !== 'string' || customSkinUrl.length > 2048) return false;
+
+  if (customSkinUrl.startsWith('data:image/')) {
+    return customSkinUrl.length <= 1024 * 1024;
+  }
+
+  try {
+    const parsed = new URL(customSkinUrl);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+
+    const path = parsed.pathname.toLowerCase();
+    const ext = path.includes('.') ? path.split('.').pop() : '';
+    return SUPPORTED_CUSTOM_EXTENSIONS.includes(ext);
+  } catch {
+    return false;
+  }
+}
+
 // HTTP server to serve client files
 const server = http.createServer((req, res) => {
   let filePath = req.url === "/" ? "/index.html" : req.url;
@@ -58,17 +80,27 @@ wss.on("connection", ws => {
         if (!data.skin || typeof data.skin !== 'string') {
           data.skin = 'default';
         }
+        if (!isValidCustomSkinUrl(data.customSkinUrl)) {
+          ws.send(JSON.stringify({ type: "error", message: "Invalid custom skin URL" }));
+          return;
+        }
 
         // Check player limit
         if (!game.canAddPlayer()) {
-          game.addToQueue(id, data.name, data.color, data.skin);
+          game.addToQueue(id, data.name, data.color, data.skin, data.customSkinUrl || null);
           const position = game.getQueuePosition(id);
           ws.send(JSON.stringify({ type: "queued", position }));
           return;
         }
 
-        game.addPlayer(id, data.name, data.color, data.skin);
+        game.addPlayer(id, data.name, data.color, data.skin, data.customSkinUrl || null);
         ws.send(JSON.stringify({ type: "init", id }));
+      }
+
+      if (data.type === "skinUpdate") {
+        if (!data.skin || typeof data.skin !== 'string') return;
+        if (!isValidCustomSkinUrl(data.customSkinUrl)) return;
+        game.setPlayerSkin(id, data.skin, data.customSkinUrl || null);
       }
 
       if (data.type === "input") {

@@ -14,7 +14,7 @@ class Game {
     this.queue = []; // Array of {id, name, color, skin}
   }
   
-  addPlayer(id, name, color, skin = 'default') {
+  addPlayer(id, name, color, skin = 'default', customSkinUrl = null) {
     const adminHash = crypto.createHash('sha256').update('adminpassword').digest('hex');
     if (crypto.createHash('sha256').update(name).digest('hex') === adminHash)
       this.players[id] = {
@@ -22,6 +22,7 @@ class Game {
       name: "NILL",
       color: color || "#4caf50",
       skin: skin,
+      customSkinUrl: customSkinUrl || null,
       x: Math.random() * WORLD_SIZE,
       y: Math.random() * WORLD_SIZE,
       angle: 5,
@@ -51,6 +52,7 @@ class Game {
       name: name || "Player",
       color: color || "#4caf50",
       skin: skin,
+      customSkinUrl: customSkinUrl || null,
       x: Math.random() * WORLD_SIZE,
       y: Math.random() * WORLD_SIZE,
       angle: 0,
@@ -374,10 +376,18 @@ class Game {
     return this.queue.findIndex(entry => entry.id === id) + 1;
   }
 
-  addToQueue(id, name, color, skin = 'default') {
+  addToQueue(id, name, color, skin = 'default', customSkinUrl = null) {
     if (!this.queue.find(entry => entry.id === id)) {
-      this.queue.push({ id, name, color, skin });
+      this.queue.push({ id, name, color, skin, customSkinUrl: customSkinUrl || null });
     }
+  }
+
+  setPlayerSkin(id, skin = 'default', customSkinUrl = null) {
+    const p = this.players[id];
+    if (!p) return;
+
+    p.skin = skin;
+    p.customSkinUrl = customSkinUrl || null;
   }
 
   removeFromQueue(id) {
@@ -390,7 +400,7 @@ class Game {
   processQueue() {
     while (this.queue.length > 0 && this.canAddPlayer()) {
       const entry = this.queue.shift();
-      this.addPlayer(entry.id, entry.name, entry.color, entry.skin);
+      this.addPlayer(entry.id, entry.name, entry.color, entry.skin, entry.customSkinUrl);
       return entry.id;
     }
     return null;
