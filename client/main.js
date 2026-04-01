@@ -45,7 +45,7 @@ let mouse = { x: 0, y: 0 };
 let keys = {};
 let camera = { x: 0, y: 0 };
 let targetCamera = { x: 0, y: 0 };
-let cameraLerpSpeed = 0.01;
+let cameraLerpSpeed = 0.1;
 let showMap = false;
 let lastServerState = null;
 let pendingInputs = [];
@@ -586,11 +586,27 @@ function draw() {
 
     const radius = 20 + Math.sqrt(p.xp || 0) * 0.3;
 
-    // Try to render skin if available
+    // Draw barrel/pipe behind the body
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.rotate(p.angle || 0);
+    const barrelLength = radius * 1.5;
+    const barrelWidth = radius * 0.45;
+    ctx.fillStyle = '#7a7a7a';
+    ctx.strokeStyle = '#555555';
+    ctx.lineWidth = 2;
+    ctx.fillRect(radius * 0.2, -barrelWidth / 2, barrelLength, barrelWidth);
+    ctx.strokeRect(radius * 0.2, -barrelWidth / 2, barrelLength, barrelWidth);
+    ctx.restore();
+
+    // Try to render skin if available (clipped to circle)
     const skinImage = p.skin ? getSkinImage(p.skin, p.customSkinUrl) : null;
     if (skinImage) {
       ctx.save();
       ctx.translate(pos.x, pos.y);
+      ctx.beginPath();
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.clip();
       ctx.drawImage(skinImage, -radius, -radius, radius * 2, radius * 2);
       ctx.restore();
     } else {

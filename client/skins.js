@@ -53,14 +53,24 @@ async function preloadCustomSkin(url) {
   if (!url) return null;
   if (customSkinCache[url]) return customSkinCache[url];
 
-  const img = new Image();
+  let img = new Image();
   img.crossOrigin = 'anonymous';
   img.src = url;
 
-  await new Promise((resolve, reject) => {
-    img.onload = resolve;
-    img.onerror = reject;
-  });
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+  } catch {
+    // CORS failed — retry without crossOrigin (canvas taint is OK; we never read pixels)
+    img = new Image();
+    img.src = url;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = reject;
+    });
+  }
 
   customSkinCache[url] = img;
   return img;
@@ -241,10 +251,10 @@ function createShopPage() {
         opacity: ${canAfford || isPurchased || isSelected ? 1 : 0.6};
       " class="skinCard" data-skin-id="${skin.id}">
         <div style="
-          width: 150px;
-          height: 150px;
+          width: 128px;
+          height: 128px;
           background: rgba(255, 255, 255, 0.1);
-          border-radius: 8px;
+          border-radius: 50%;
           margin: 0 auto 15px;
           display: flex;
           align-items: center;
@@ -252,9 +262,9 @@ function createShopPage() {
           overflow: hidden;
         " class="skinPreview" data-skin-id="${skin.id}">
           ${skin.isCustom && customSkinUrl ?
-            `<img src="${customSkinUrl}" style="max-width: 126px; max-height: 126px; width: auto; height: auto; object-fit: contain;" class="customImage">` :
-            (skin.path ? `<img src="${skin.path}" style="max-width: 126px; max-height: 126px; width: auto; height: auto; object-fit: contain;">` :
-            `<div style="width: 120px; height: 120px; border-radius: 50%; background: #4caf50;"></div>`)
+            `<img src="${customSkinUrl}" style="width: 128px; height: 128px; object-fit: cover;" class="customImage">` :
+            (skin.path ? `<img src="${skin.path}" style="width: 128px; height: 128px; object-fit: cover;">` :
+            `<div style="width: 128px; height: 128px; border-radius: 50%; background: #4caf50;"></div>`)
           }
         </div>
 
@@ -427,9 +437,49 @@ function createShopPage() {
 
           urlInput.focus();
         } else if (isPurchased) {
-          console.log("Equipping custom tank");
-          setSkin(skinId);
-          refreshShop();
+          console.log("Opening change-URL modal for custom tank");
+          const modal = createUrlInputModal();
+          document.body.appendChild(modal);
+
+          const confirmBtn = modal.querySelector('#confirmUrlBtn');
+          const cancelBtn = modal.querySelector('#cancelUrlBtn');
+          const urlInput = modal.querySelector('#urlInput');
+
+          modal.querySelector('h2').textContent = 'Change Custom Tank Image';
+          confirmBtn.textContent = 'Change';
+          cancelBtn.textContent = 'Just equip';
+          cancelBtn.style.background = '#2196F3';
+
+          if (customSkinUrl) urlInput.value = customSkinUrl;
+
+          confirmBtn.onclick = async () => {
+            const url = urlInput.value.trim();
+            if (!isSupportedCustomSkinUrl(url)) {
+              alert('Enter a valid image URL (png, jpg, gif, webp, svg, avif or data:image/*)');
+              return;
+            }
+            try {
+              // Invalidate cache for new URL so a fresh image is loaded
+              delete customSkinCache[url];
+              await preloadCustomSkin(url);
+              customSkinUrl = url;
+              localStorage.setItem('customSkinUrl', customSkinUrl);
+              setSkin(skinId);
+              modal.remove();
+              refreshShop();
+            } catch (error) {
+              console.error('\u274C Failed to load custom skin URL:', error);
+              alert('Image could not be loaded from that URL. Try another link.');
+            }
+          };
+
+          cancelBtn.onclick = () => {
+            setSkin(skinId);
+            modal.remove();
+            refreshShop();
+          };
+
+          urlInput.focus();
         } else {
           console.log("Not enough coins for custom tank");
         }
