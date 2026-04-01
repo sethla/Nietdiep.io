@@ -131,6 +131,46 @@ function getSkinImage(skinId, playerCustomSkinUrl = null) {
   return loadedSkinImages[skinId] || null;
 }
 
+// Offscreen canvas cache: one 128x128 canvas per unique skin, updated once per frame.
+// This avoids running ctx.clip() on the main canvas for every player every frame —
+// instead we composite the GIF frame into a circular offscreen once, then do a fast
+// canvas-to-canvas drawImage for each player that uses it.
+const skinCanvasCache = {};
+
+function getSkinCanvas(skinId, playerCustomSkinUrl = null) {
+  const img = getSkinImage(skinId, playerCustomSkinUrl);
+  if (!img) return null;
+
+  const key = skinId === 'custom' ? (playerCustomSkinUrl || 'custom') : skinId;
+  const SIZE = 256;
+  const now = performance.now();
+
+  let entry = skinCanvasCache[key];
+  if (!entry) {
+    const canvas = document.createElement('canvas');
+    canvas.width = SIZE;
+    canvas.height = SIZE;
+    entry = { canvas, ctx: canvas.getContext('2d'), lastUpdated: -1 };
+    skinCanvasCache[key] = entry;
+  }
+
+  // Only redraw once per ~16 ms so multiple players sharing a skin cost just 1 composite
+  if (now - entry.lastUpdated >= 14) {
+    const { canvas, ctx: offCtx } = entry;
+    offCtx.clearRect(0, 0, SIZE, SIZE);
+    offCtx.drawImage(img, 0, 0, SIZE, SIZE);
+    // Clip to circle using destination-in (no ctx.clip needed on the main canvas)
+    offCtx.globalCompositeOperation = 'destination-in';
+    offCtx.beginPath();
+    offCtx.arc(SIZE / 2, SIZE / 2, SIZE / 2, 0, Math.PI * 2);
+    offCtx.fill();
+    offCtx.globalCompositeOperation = 'source-over';
+    entry.lastUpdated = now;
+  }
+
+  return entry.canvas;
+}
+
 function setSkin(skinId) {
   if (AVAILABLE_SKINS.find(s => s.id === skinId)) {
     selectedSkin = skinId;
@@ -646,4 +686,4 @@ async function initializeCustomSkinCache() {
   }
 }
 
-export { loadSkins, getSkinImage, setSkin, getSelectedSkin, getCustomSkinUrl, setSkinChangedHandler, AVAILABLE_SKINS, createShopPage, updateCoins, buySkin, openShop, closeShop, refreshShop, redeemCode, initializeCustomSkinCache };
+export { loadSkins, getSkinImage, getSkinCanvas, setSkin, getSelectedSkin, getCustomSkinUrl, setSkinChangedHandler, AVAILABLE_SKINS, createShopPage, updateCoins, buySkin, openShop, closeShop, refreshShop, redeemCode, initializeCustomSkinCache };

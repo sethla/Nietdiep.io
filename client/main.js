@@ -1,5 +1,5 @@
 import { drawGrid, drawMinimap, drawMapBorder } from "./render.js";
-import { loadSkins, getSkinImage, setSkin, getSelectedSkin, getCustomSkinUrl, setSkinChangedHandler, createShopPage, updateCoins, openShop, closeShop, initializeCustomSkinCache } from "./skins.js";
+import { loadSkins, getSkinImage, getSkinCanvas, setSkin, getSelectedSkin, getCustomSkinUrl, setSkinChangedHandler, createShopPage, updateCoins, openShop, closeShop, initializeCustomSkinCache } from "./skins.js";
 
 const WORLD_SIZE = 5000;
 const canvas = document.getElementById("game");
@@ -622,16 +622,10 @@ function draw() {
     ctx.strokeRect(radius * 0.2, -barrelWidth / 2, barrelLength, barrelWidth);
     ctx.restore();
 
-    // Try to render skin if available (clipped to circle)
-    const skinImage = p.skin ? getSkinImage(p.skin, p.customSkinUrl) : null;
-    if (skinImage) {
-      ctx.save();
-      ctx.translate(pos.x, pos.y);
-      ctx.beginPath();
-      ctx.arc(0, 0, radius, 0, Math.PI * 2);
-      ctx.clip();
-      ctx.drawImage(skinImage, -radius, -radius, radius * 2, radius * 2);
-      ctx.restore();
+    // Try to render skin if available (clipped to circle via offscreen canvas)
+    const skinCanvas = p.skin ? getSkinCanvas(p.skin, p.customSkinUrl) : null;
+    if (skinCanvas) {
+      ctx.drawImage(skinCanvas, pos.x - radius, pos.y - radius, radius * 2, radius * 2);
     } else {
       // Fallback to colored circle
       ctx.beginPath();
