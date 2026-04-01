@@ -50,6 +50,7 @@ let showMap = false;
 let lastServerState = null;
 let pendingInputs = [];
 let lastInputSent = 0;
+let myServerPos = null; // last server-authoritative position for local player
 let joystick = { active: false, touchId: null, vx: 0, vy: 0 };
 let leaderboard = [];
 let queuePosition = 0;
@@ -302,12 +303,27 @@ socket.onmessage = e => {
         }
       }
 
-      // Copy all server data first
+      // Copy all server data first, but keep client-predicted x/y to avoid snapping
+      const predictedX = clientPlayer.x;
+      const predictedY = clientPlayer.y;
       Object.assign(clientPlayer, serverPlayer);
 
-      // Don't apply any special position handling - trust the server
-      // Client prediction happens in sendInput() which runs at 60fps
-      // and server updates at 15fps, so client prediction keeps things smooth
+      // Store authoritative server position for gentle correction
+      myServerPos = { x: serverPlayer.x, y: serverPlayer.y };
+
+      const errX = serverPlayer.x - predictedX;
+      const errY = serverPlayer.y - predictedY;
+      const err = Math.sqrt(errX * errX + errY * errY);
+
+      if (err > 120) {
+        // Large discrepancy (respawn, wall collision, etc.) — hard snap
+        clientPlayer.x = serverPlayer.x;
+        clientPlayer.y = serverPlayer.y;
+      } else {
+        // Restore predicted position; per-frame nudge in sendInput() will correct it
+        clientPlayer.x = predictedX;
+        clientPlayer.y = predictedY;
+      }
     }
 
     // Update other players with interpolation data
@@ -439,6 +455,13 @@ function sendInput(delta = 16) {
       players[myId].y += nvy * players[myId].speed * (delta / 16);
       players[myId].x = Math.max(0, Math.min(WORLD_SIZE, players[myId].x));
       players[myId].y = Math.max(0, Math.min(WORLD_SIZE, players[myId].y));
+    }
+
+    // Gently nudge predicted position toward last server position (5% per frame)
+    // This corrects accumulated drift without causing visible snaps
+    if (myServerPos) {
+      players[myId].x += (myServerPos.x - players[myId].x) * 0.05;
+      players[myId].y += (myServerPos.y - players[myId].y) * 0.05;
     }
   }
 
