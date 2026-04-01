@@ -8,6 +8,17 @@ const AVAILABLE_SKINS = [
 
 let loadedSkinImages = {};
 let selectedSkin = localStorage.getItem('selectedSkin') || 'default';
+
+// Hidden container: images must live in the DOM so browsers animate GIF frames
+let _skinDomContainer = null;
+function getSkinDomContainer() {
+  if (!_skinDomContainer) {
+    _skinDomContainer = document.createElement('div');
+    _skinDomContainer.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none;';
+    document.body.appendChild(_skinDomContainer);
+  }
+  return _skinDomContainer;
+}
 let purchasedSkins = new Set(['default']);
 let customSkinUrl = localStorage.getItem('customSkinUrl') || null;
 let playerCoins = 0;
@@ -72,6 +83,7 @@ async function preloadCustomSkin(url) {
     });
   }
 
+  getSkinDomContainer().appendChild(img);
   customSkinCache[url] = img;
   return img;
 }
@@ -87,6 +99,7 @@ async function loadSkins() {
           img.onload = resolve;
           img.onerror = reject;
         });
+        getSkinDomContainer().appendChild(img);
         loadedSkinImages[skin.id] = img;
         console.log(`✅ Loaded skin: ${skin.name}`);
       } catch (err) {
