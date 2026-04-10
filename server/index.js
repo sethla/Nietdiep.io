@@ -31,7 +31,14 @@ function isValidCustomSkinUrl(customSkinUrl) {
 
 // HTTP server to serve client files
 const server = http.createServer((req, res) => {
-  let filePath = req.url === "/" ? "/index.html" : req.url;
+  let rawPath;
+  try {
+    rawPath = req.url === "/" ? "/index.html" : decodeURIComponent(req.url.split('?')[0]);
+  } catch {
+    res.writeHead(400); res.end("Bad Request"); return;
+  }
+  if (rawPath.includes('..')) { res.writeHead(403); res.end("Forbidden"); return; }
+  let filePath = rawPath;
   const fullPath = path.join(__dirname, "..", filePath);
 
   fs.readFile(fullPath, (err, data) => {
@@ -111,6 +118,11 @@ wss.on("connection", ws => {
         ws.input = data;
       }
       if (data.type === "shoot") game.shoot(id);
+      if (data.type === "leave") {
+        game.removePlayer(id);
+        delete ws.input;
+        ws.send(JSON.stringify({ type: "requestSetup" }));
+      }
       if (data.type === "respawn") game.respawnPlayer(id);
       if (data.type === "upgrade" && data.stat) {
         const multiplier = data.multiplier || 1;

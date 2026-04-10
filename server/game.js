@@ -72,6 +72,7 @@ class Game {
       size: 20,
       tick: 0,
       bodyCooldown: 0,
+      totalXp: 0,
       upgradeCounts: {}
 
     };
@@ -102,6 +103,7 @@ class Game {
       p.regenerationRate = 0.0001;
       p.tick = 0;
       p.bodyCooldown = 0;
+      p.totalXp = 0;
       p.upgradeCounts = {};
 
   }
@@ -214,12 +216,14 @@ class Game {
           // Death check
           if (p.health <= 0 && p.alive) {
             op.xp += 20;
+            op.totalXp = (op.totalXp || 0) + 20;
             this.updateLevel(op.id);
             p.alive = false;
           }
 
           if (op.health <= 0 && op.alive) {
             p.xp += 20;
+            p.totalXp = (p.totalXp || 0) + 20;
             this.updateLevel(p.id);
             op.alive = false;
           }
@@ -291,6 +295,7 @@ class Game {
           if (p.health <= 0) {
             if (b.owner && this.players[b.owner]) {
               this.players[b.owner].xp += 20;
+              this.players[b.owner].totalXp = (this.players[b.owner].totalXp || 0) + 20;
               this.updateLevel(b.owner);
             }
             p.alive = false;
@@ -349,6 +354,7 @@ class Game {
 
         if (dist < 20 + orbRadius) {
           p.xp += orb.xpValue;
+          p.totalXp = (p.totalXp || 0) + orb.xpValue;
           this.updateLevel(playerId);
           delete this.Orbs[orbId];
           break;
@@ -409,12 +415,13 @@ class Game {
   getLeaderboard() {
     return Object.values(this.players)
       .filter(p => p.alive)
-      .sort((a, b) => b.level - a.level)
+      .sort((a, b) => (b.totalXp || 0) - (a.totalXp || 0))
       .slice(0, 10)
       .map(p => ({
         name: p.name,
         level: p.level,
-        xp: p.xp
+        xp: p.xp,
+        totalXp: p.totalXp || 0
       }));
   }
 }

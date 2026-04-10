@@ -1,9 +1,18 @@
 // Skins system - manages player skins
 const AVAILABLE_SKINS = [
-  { id: 'default', name: 'Default', path: null, price: 0 },
-  { id: 'tank1', name: 'Wietse', path: '/public/skins/wietse.png', price: 50 },
-  { id: 'tank2', name: 'ja', path: '/public/skins/ja.png', price: 2 },
-  { id: 'custom', name: 'Custom Tank', path: null, price: 200, isCustom: true },
+  { id: 'default',   name: 'Default',      path: null, price: 0 },
+  { id: 'wietse',   name: 'Wietse',       path: '/public/skins/wietse.png', price: 2 },
+  { id: 'pirate',   name: 'Pirate',       path: '/public/skins/Schermafbeelding%202026-03-11%20163611.png', price: 7 },
+  { id: 'nike',     name: 'Nike Guy',     path: '/public/skins/Schermafbeelding%202026-03-26%20144355.png', price: 1 },
+  { id: 'thunder',  name: 'Thunder Eyes', path: '/public/skins/Schermafbeelding%202026-03-27%20010011.png', price: 16 },
+  { id: 'mugshot',  name: 'Mugshot',      path: '/public/skins/Schermafbeelding%202026-03-29%20192447.png', price: 45 },
+  { id: 'walter',   name: 'Walter',       path: '/public/skins/Schermafbeelding%202026-03-29%20205404.png', price: 67 },
+  { id: 'pharaoh',  name: 'Pharaoh',      path: '/public/skins/das.jpg', price: 76 },
+  { id: 'elf_lord', name: 'Elf Lord',     path: '/public/skins/ab67616d00001e02623b2d23babc64bea5b23c30.jpg', price: 34 },
+  { id: 'brad',     name: 'Brad',         path: '/public/skins/artworks-D3D4X3ABcjo4hfWs-VFRNTQ-t240x240.jpg', price: 65 },
+  { id: 'radahn',   name: 'Radahn',       path: '/public/skins/radahn-miquella-hd-transparent-min.png', price: 21 },
+  { id: 'wizard',   name: 'Wizard',       path: '/public/skins/Screenshot_20260323_160733_TikTok.jpg', price: 78 },
+  { id: 'custom',   name: 'Custom Tank',  path: null, price: 250, isCustom: true },
 ];
 
 let loadedSkinImages = {};
@@ -14,7 +23,7 @@ let _skinDomContainer = null;
 function getSkinDomContainer() {
   if (!_skinDomContainer) {
     _skinDomContainer = document.createElement('div');
-    _skinDomContainer.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:-9999;';
+    _skinDomContainer.style.cssText = 'position:fixed;top:0;left:0;pointer-events:none;z-index:0;opacity:0.003;';
     document.body.appendChild(_skinDomContainer);
   }
   return _skinDomContainer;
@@ -35,7 +44,7 @@ if (customSkinUrl) {
 const validCodes = {
   'FREECOINS50': 50,
   'BOOST100': 100,
-  'VIP200': 200,
+  'VIP2000': 2000,
 };
 let usedCodes = new Set();
 

@@ -101,6 +101,8 @@ let myKills = 0;                           // kill counter
 let myPrevHealth = null;                   // previous health for shake detection
 let prevAlivePlayers = {};                 // id -> bool, for kill feed
 let bulletTrailMap = {};                   // key -> {points, lastSeen} bullet trails
+let aimJoystick = { active: false, touchId: null, vx: 0, vy: 0, angle: 0 };
+let lastAutoFire = 0;
 
 function startFadeIn() {
   isFadingIn = true;
@@ -118,6 +120,10 @@ const respawnBtn = document.getElementById("respawnBtn");
 const respawnShopBtn = document.getElementById("respawnShopBtn");
 const upgradePanel = document.getElementById("upgradePanel");
 const upgradePointsText = document.getElementById("upgradePoints");
+const lbToggleBtn = document.getElementById("lbToggleBtn");
+const lbOverlay   = document.getElementById("lbOverlay");
+const lbList      = document.getElementById("lbList");
+const lbCloseBtn  = document.getElementById("lbCloseBtn");
 
 console.log("🔍 Buttons found:", { startBtn, shopBtn, respawnBtn, respawnShopBtn });
 
@@ -309,6 +315,18 @@ socket.onmessage = e => {
     // Update leaderboard
     if (data.leaderboard) {
       leaderboard = data.leaderboard;
+      // Update HTML overlay
+      if (lbList) {
+        lbList.innerHTML = leaderboard.map((player, idx) => {
+          const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx+1}.`;
+          const cls = idx === 0 ? 'gold' : idx === 1 ? 'silver' : idx === 2 ? 'bronze' : '';
+          return `<div class="lb-row ${cls}">
+            <span class="lb-rank">${medal}</span>
+            <span class="lb-name">${player.name}</span>
+            <span class="lb-xp">⭐ ${Math.round(player.totalXp||0)} XP · Lvl ${player.level}</span>
+          </div>`;
+        }).join('');
+      }
     }
 
     // Store server time for interpolation
@@ -393,6 +411,15 @@ socket.onmessage = e => {
       }
     }
 
+    // Remove players that are no longer in the server state (disconnected)
+    for (const id in players) {
+      if (id !== myId && !serverPlayers[id]) {
+        delete players[id];
+        delete playerPrevPos[id];
+        delete prevAlivePlayers[id];
+      }
+    }
+
     bullets = serverBullets;
     orbs = serverOrbs;
 
@@ -422,6 +449,7 @@ socket.onmessage = e => {
     if (myId && players[myId]) {
       const me = players[myId];
       if (!me.alive) {
+        if (lbToggleBtn) { lbToggleBtn.style.display = 'none'; lbOverlay.classList.remove('open'); }
         // Only show respawn menu if the shop is not open
         if (!document.getElementById('shopPage')) {
           respawnMenu.style.display = "block";
@@ -430,6 +458,7 @@ socket.onmessage = e => {
           updateMapView();
         }
       } else {
+        if (lbToggleBtn && window.innerWidth <= 768) lbToggleBtn.style.display = 'block';
         respawnMenu.style.display = "none";
         respawnMenu.classList.remove("show");
         startMenu.style.display = "none";
@@ -471,8 +500,31 @@ window.addEventListener("mousemove", e => {
   mouse.y = e.clientY;
 });
 
+function returnToMainMenu() {
+  if (!myId) return;
+  socket.send(JSON.stringify({ type: "leave" }));
+  myId = null;
+  players = {};
+  bullets = {};
+  orbs = {};
+  respawnMenu.style.display = "none";
+  respawnMenu.classList.remove("show");
+  upgradePanel.style.display = "none";
+  closeShop();
+  if (lbToggleBtn) lbToggleBtn.style.display = "none";
+  if (lbOverlay) lbOverlay.classList.remove("open");
+  startMenu.style.display = "block";
+  startMenu.classList.add("show");
+  showMap = true;
+  updateMapView();
+}
+
 window.addEventListener("keydown", e => {
   keys[e.key] = true;
+  if ((e.key === "m" || e.key === "M") && myId) {
+    returnToMainMenu();
+    return;
+  }
   if (upgradePanel.style.display !== "none") {
     const stats = ["damage", "power", "bulletSpeed", "fireRate", "bodyDamage", "regenerationRate", "speed", "maxHealth"];
     const num = parseInt(e.key);
@@ -492,9 +544,11 @@ window.addEventListener("mousedown", () => {
 function sendInput(delta = 16) {
   if (!myId || !players[myId] || !players[myId].alive) return;
 
-  // Aim angle from mouse (PC) or joystick direction (mobile)
+  // Aim angle: aim joystick > move joystick fallback > mouse
   let angle;
-  if (joystick.active && (joystick.vx !== 0 || joystick.vy !== 0)) {
+  if (aimJoystick.active && (aimJoystick.vx !== 0 || aimJoystick.vy !== 0)) {
+    angle = aimJoystick.angle;
+  } else if (joystick.active && (joystick.vx !== 0 || joystick.vy !== 0)) {
     angle = Math.atan2(joystick.vy, joystick.vx);
   } else {
     const mdx = mouse.x - (canvas.width * 0.5);
@@ -544,6 +598,15 @@ function sendInput(delta = 16) {
     socket.send(JSON.stringify({ type: "input", angle, vx: nvx, vy: nvy, timestamp: now }));
     lastInputSent = now;
   }
+
+  // Auto-fire when aim joystick is being dragged
+  if (aimJoystick.active && (aimJoystick.vx !== 0 || aimJoystick.vy !== 0)) {
+    const fireRate = players[myId]?.fireRate || 500;
+    if (now - lastAutoFire >= fireRate) {
+      socket.send(JSON.stringify({ type: "shoot" }));
+      lastAutoFire = now;
+    }
+  }
 }
 
 // Helper function to get smooth render position for other players
@@ -578,10 +641,14 @@ function getPlayerRenderPos(id) {
 const joystickBase = document.getElementById("joystickBase");
 const joystickKnob = document.getElementById("joystickKnob");
 const shootBtn    = document.getElementById("shootBtn");
+const aimJoystickArea = document.getElementById("aimJoystickArea");
+const aimJoystickBase = document.getElementById("aimJoystickBase");
+const aimJoystickKnob = document.getElementById("aimJoystickKnob");
 
 window.addEventListener("touchstart", () => {
   document.getElementById("joystickArea").style.display = "block";
-  shootBtn.style.display = "block";
+  aimJoystickArea.style.display = "block";
+  shootBtn.style.display = "none"; // replaced by aim joystick
 }, { once: true });
 
 joystickBase.addEventListener("touchstart", e => {
@@ -627,6 +694,50 @@ shootBtn.addEventListener("touchstart", e => {
   if (!myId || !players[myId] || !players[myId].alive) return;
   socket.send(JSON.stringify({ type: "shoot" }));
 }, { passive: false });
+
+// --- Aim joystick (right side) ---
+aimJoystickBase.addEventListener("touchstart", e => {
+  e.preventDefault();
+  const touch = e.changedTouches[0];
+  aimJoystick.active = true;
+  aimJoystick.touchId = touch.identifier;
+  const rect = aimJoystickBase.getBoundingClientRect();
+  aimJoystick.baseX = rect.left + rect.width / 2;
+  aimJoystick.baseY = rect.top + rect.height / 2;
+}, { passive: false });
+
+aimJoystickBase.addEventListener("touchmove", e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier !== aimJoystick.touchId) continue;
+    const dx = t.clientX - aimJoystick.baseX;
+    const dy = t.clientY - aimJoystick.baseY;
+    const maxR = 38;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const clampedDist = Math.min(dist, maxR);
+    const a = Math.atan2(dy, dx);
+    aimJoystick.vx = Math.cos(a) * (clampedDist / maxR);
+    aimJoystick.vy = Math.sin(a) * (clampedDist / maxR);
+    aimJoystick.angle = a;
+    const kx = Math.cos(a) * clampedDist;
+    const ky = Math.sin(a) * clampedDist;
+    aimJoystickKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+  }
+}, { passive: false });
+
+aimJoystickBase.addEventListener("touchend", e => {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== aimJoystick.touchId) continue;
+    aimJoystick.active = false;
+    aimJoystick.vx = 0;
+    aimJoystick.vy = 0;
+    aimJoystickKnob.style.transform = "translate(-50%, -50%)";
+  }
+});
+
+// --- Leaderboard overlay ---
+lbToggleBtn.addEventListener("click", () => lbOverlay.classList.add("open"));
+lbCloseBtn.addEventListener("click", () => lbOverlay.classList.remove("open"));
 
 function draw() {
   if (!myId) {
@@ -832,9 +943,15 @@ function draw() {
   const orbNow = Date.now();
   for (let id in orbs) {
     const orb = orbs[id];
-    const orbPhase = parseFloat(id) * 0.7;
+    // Stable numeric phase from string id (charCode sum)
+    let orbPhaseHash = 0;
+    for (let ci = 0; ci < id.length; ci++) orbPhaseHash += id.charCodeAt(ci);
+    const orbPhase = orbPhaseHash * 0.7;
     const orbPulse = 1 + Math.sin(orbNow * 0.0025 + orbPhase) * 0.07;
-    const orbRadius = 30 * orb.size * orbPulse;
+    const orbRadius = 30 * (orb.size || 0.3) * orbPulse;
+
+    // Guard: skip if any coordinate is non-finite
+    if (!isFinite(orb.x) || !isFinite(orb.y) || !isFinite(orbRadius) || orbRadius <= 0) continue;
 
     // Outer glow
     const glowR = orbRadius * 1.7;
@@ -894,34 +1011,35 @@ function draw() {
   ctx.restore();
   drawMinimap(ctx, players, myId, WORLD_SIZE);
 
-  // Draw leaderboard
-  ctx.save();
-  const isMobile = window.innerWidth <= 768;
-  const lbW = isMobile ? 160 : 240;
-  const lbX = canvas.width - lbW - 10;
-  const lbY = 10;
-  const lbH = Math.min(leaderboard.length * 18 + 40, 250);
+  // Draw leaderboard on canvas (PC only — mobile uses HTML overlay)
+  if (window.innerWidth > 768) {
+    ctx.save();
+    const lbW = 240;
+    const lbX = 14;
+    const lbY = 10;
+    const lbH = Math.min(leaderboard.length * 20 + 44, 264);
 
-  ctx.fillStyle = "rgba(255,255,255,0.07)";
-  ctx.strokeStyle = "rgba(255,255,255,0.22)";
-  ctx.lineWidth = 1;
-  roundRect(ctx, lbX, lbY, lbW, lbH, 12);
-  ctx.fill();
-  ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.07)";
+    ctx.strokeStyle = "rgba(255,255,255,0.22)";
+    ctx.lineWidth = 1;
+    roundRect(ctx, lbX, lbY, lbW, lbH, 12);
+    ctx.fill();
+    ctx.stroke();
 
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
-  ctx.font = `bold ${isMobile ? 12 : 14}px sans-serif`;
-  ctx.textAlign = "center";
-  ctx.fillText("TOP PLAYERS", lbX + lbW / 2, lbY + 20);
-
-  ctx.font = `${isMobile ? 10 : 12}px sans-serif`;
-  leaderboard.forEach((player, idx) => {
-    const y = lbY + 38 + idx * 17;
-    ctx.fillStyle = idx === 0 ? "#ffd700" : idx === 1 ? "#c0c0c0" : idx === 2 ? "#cd7f32" : "rgba(255,255,255,0.8)";
+    ctx.fillStyle = "rgba(255,255,255,0.9)";
+    ctx.font = "bold 14px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(`${idx + 1}. ${player.name} (Lvl ${player.level})`, lbX + lbW / 2, y);
-  });
-  ctx.restore();
+    ctx.fillText("TOP PLAYERS", lbX + lbW / 2, lbY + 20);
+
+    ctx.font = "12px sans-serif";
+    leaderboard.forEach((player, idx) => {
+      const y = lbY + 40 + idx * 18;
+      ctx.fillStyle = idx === 0 ? "#ffd700" : idx === 1 ? "#c0c0c0" : idx === 2 ? "#cd7f32" : "rgba(255,255,255,0.8)";
+      ctx.textAlign = "center";
+      ctx.fillText(`${idx + 1}. ${player.name} — ${Math.round(player.totalXp||0)} XP`, lbX + lbW / 2, y);
+    });
+    ctx.restore();
+  }
 
   // Kill feed (left side)
   const nowKf = Date.now();
@@ -963,19 +1081,20 @@ function draw() {
     }
   }
 
-  // Kill counter HUD (top-left, below minimap area)
+  // Kill counter HUD
   if (myKills > 0) {
+    const kcY = window.innerWidth > 768 ? 280 : 178;
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,0.07)';
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.lineWidth = 1;
-    roundRect(ctx, 14, 178, 106, 28, 8);
+    roundRect(ctx, 14, kcY, 106, 28, 8);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = 'rgba(255,255,255,0.9)';
     ctx.font = 'bold 13px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(`💀 ${myKills} kill${myKills !== 1 ? 's' : ''}`, 22, 198);
+    ctx.fillText(`💀 ${myKills} kill${myKills !== 1 ? 's' : ''}`, 22, kcY + 20);
     ctx.restore();
   }
 
