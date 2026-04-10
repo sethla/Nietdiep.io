@@ -1,6 +1,33 @@
 import { drawGrid, drawMinimap, drawMapBorder } from "./render.js";
 import { loadSkins, getSkinImage, getSkinCanvas, setSkin, getSelectedSkin, getCustomSkinUrl, setSkinChangedHandler, createShopPage, updateCoins, openShop, closeShop, initializeCustomSkinCache } from "./skins.js";
 
+function darkenColor(color, amount = 0.3) {
+  if (!color || typeof color !== 'string') return '#222';
+  if (color.startsWith('#') && color.length >= 7) {
+    const r = parseInt(color.slice(1, 3), 16);
+    const g = parseInt(color.slice(3, 5), 16);
+    const b = parseInt(color.slice(5, 7), 16);
+    return `rgb(${Math.floor(r*(1-amount))},${Math.floor(g*(1-amount))},${Math.floor(b*(1-amount))})`;
+  }
+  return color;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  if (w < 2*r) r = w/2;
+  if (h < 2*r) r = h/2;
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
 const WORLD_SIZE = 5000;
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
@@ -634,7 +661,7 @@ function draw() {
       ctx.fill();
     }
 
-    ctx.strokeStyle = (id === myId ? p.color : "#ff0000");
+    ctx.strokeStyle = darkenColor(p.color || '#4caf50', 0.3);
     ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
@@ -643,7 +670,7 @@ function draw() {
     ctx.fillStyle = "#fff";
     ctx.font = "16px sans-serif";
     ctx.textAlign = "center";
-    ctx.strokeStyle = (id === myId ? p.color : "#ff0000");
+    ctx.strokeStyle = darkenColor(p.color || '#4caf50', 0.3);
     ctx.lineWidth = 2;
     ctx.strokeText(p.name, pos.x, pos.y - radius - 10);
     ctx.fillText(p.name, pos.x, pos.y - radius - 10);
@@ -663,10 +690,14 @@ function draw() {
     
     // Only render if within world bounds
     if (x >= 0 && x <= WORLD_SIZE && y >= 0 && y <= WORLD_SIZE) {
+      const ownerColor = players[b.owner]?.color || '#ffffff';
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
       ctx.fillStyle = "#fff";
       ctx.fill();
+      ctx.strokeStyle = darkenColor(ownerColor, 0.3);
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
     }
   });
 
@@ -708,42 +739,74 @@ function draw() {
 
   // Draw leaderboard
   ctx.save();
-  ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-  ctx.fillRect(canvas.width - 250, 10, 240, Math.min(leaderboard.length * 20 + 30, 250));
+  const isMobile = window.innerWidth <= 768;
+  const lbW = isMobile ? 160 : 240;
+  const lbX = canvas.width - lbW - 10;
+  const lbY = 10;
+  const lbH = Math.min(leaderboard.length * 18 + 40, 250);
 
-  ctx.fillStyle = "#fff";
-  ctx.font = "bold 16px sans-serif";
-  ctx.textAlign = "right";
-  ctx.fillText("TOP PLAYERS", canvas.width - 20, 30);
+  ctx.fillStyle = "rgba(255,255,255,0.07)";
+  ctx.strokeStyle = "rgba(255,255,255,0.22)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, lbX, lbY, lbW, lbH, 12);
+  ctx.fill();
+  ctx.stroke();
 
-  ctx.font = "12px sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.9)";
+  ctx.font = `bold ${isMobile ? 12 : 14}px sans-serif`;
+  ctx.textAlign = "center";
+  ctx.fillText("TOP PLAYERS", lbX + lbW / 2, lbY + 20);
+
+  ctx.font = `${isMobile ? 10 : 12}px sans-serif`;
   leaderboard.forEach((player, idx) => {
-    const y = 50 + idx * 18;
-    ctx.fillStyle = idx === 0 ? "#ffd700" : idx === 1 ? "#c0c0c0" : idx === 2 ? "#cd7f32" : "#ccc";
-    ctx.fillText(`${idx + 1}. ${player.name} (Lvl ${player.level})`, canvas.width - 20, y);
+    const y = lbY + 38 + idx * 17;
+    ctx.fillStyle = idx === 0 ? "#ffd700" : idx === 1 ? "#c0c0c0" : idx === 2 ? "#cd7f32" : "rgba(255,255,255,0.8)";
+    ctx.textAlign = "center";
+    ctx.fillText(`${idx + 1}. ${player.name} (Lvl ${player.level})`, lbX + lbW / 2, y);
   });
   ctx.restore();
 
   const p = players[myId];
   if (p) {
-    const barWidth = 300;
-    const barHeight = 20;
+    const isMobile = window.innerWidth <= 768;
+    const barWidth = isMobile ? Math.min(window.innerWidth - 40, 280) : 300;
+    const barHeight = 22;
     const x = canvas.width / 2 - barWidth / 2;
-    const y = canvas.height - barHeight - 20;
+    const barBottom = isMobile ? canvas.height - barHeight - 190 : canvas.height - barHeight - 20;
     const xpPercent = (p.xp % 100) / 100;
-    const UpgradeAmount = p.CanUpgrade
-    //bar
-    ctx.fillStyle = "#555";
-    ctx.fillRect(x, y, barWidth, barHeight);
+    const br = barHeight / 2;
+
+    ctx.save();
+    // Outer glass shell
+    ctx.fillStyle = "rgba(0,0,0,0.4)";
+    roundRect(ctx, x - 3, barBottom - 3, barWidth + 6, barHeight + 6, br + 3);
+    ctx.fill();
+    // Glass track
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.strokeStyle = "rgba(255,255,255,0.3)";
+    ctx.lineWidth = 1.5;
+    roundRect(ctx, x, barBottom, barWidth, barHeight, br);
+    ctx.fill();
+    ctx.stroke();
+    // XP fill
+    if (xpPercent > 0) {
+      const fillW = Math.max(barHeight, barWidth * xpPercent);
+      const grad = ctx.createLinearGradient(x, 0, x + fillW, 0);
+      grad.addColorStop(0, "rgba(220,220,255,0.95)");
+      grad.addColorStop(1, "rgba(255,255,255,0.85)");
+      ctx.fillStyle = grad;
+      roundRect(ctx, x, barBottom, fillW, barHeight, br);
+      ctx.fill();
+    }
+    // Label
     ctx.fillStyle = "#fff";
-    ctx.fillRect(x, y, barWidth * xpPercent, barHeight);
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x, y, barWidth, barHeight);
-    ctx.fillStyle = "#00000098";
+    ctx.font = `bold ${isMobile ? 11 : 13}px sans-serif`;
     ctx.textAlign = "center";
-    ctx.font = "16px sans-serif";
-    ctx.fillText(`Level ${p.level} | XP: ${p.xp}`, canvas.width / 2, y + barHeight - 5);
+    ctx.shadowColor = "rgba(0,0,0,0.9)";
+    ctx.shadowBlur = 4;
+    ctx.fillText(`Level ${p.level} | XP: ${p.xp}`, canvas.width / 2, barBottom + barHeight - 5);
+    ctx.shadowBlur = 0;
+    ctx.restore();
   }
   
   // Render fade-in overlay

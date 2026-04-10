@@ -14,7 +14,7 @@ let _skinDomContainer = null;
 function getSkinDomContainer() {
   if (!_skinDomContainer) {
     _skinDomContainer = document.createElement('div');
-    _skinDomContainer.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none;';
+    _skinDomContainer.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;overflow:visible;pointer-events:none;z-index:-9999;';
     document.body.appendChild(_skinDomContainer);
   }
   return _skinDomContainer;
@@ -84,6 +84,7 @@ async function preloadCustomSkin(url) {
   }
 
   getSkinDomContainer().appendChild(img);
+  img.style.cssText = 'position:absolute;width:64px;height:64px;';
   customSkinCache[url] = img;
   return img;
 }
@@ -100,6 +101,7 @@ async function loadSkins() {
           img.onerror = reject;
         });
         getSkinDomContainer().appendChild(img);
+        img.style.cssText = 'position:absolute;width:64px;height:64px;';
         loadedSkinImages[skin.id] = img;
         console.log(`✅ Loaded skin: ${skin.name}`);
       } catch (err) {

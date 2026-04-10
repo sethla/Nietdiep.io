@@ -62,11 +62,36 @@
       box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
     }
     .upgrade-item { display: flex; flex-direction: column; align-items: center; }
-    .upgrade-btn { background: #4caf50; color: white; border: none; padding: 5px; cursor: pointer; border-radius: 5px; }
-    .upgrade-btn:hover { background: #45a049; }
-    .upgrade-btn-2x { background: #ff9800; color: white; border: none; padding: 3px; cursor: pointer; border-radius: 3px; margin-top: 2px; }
-    .upgrade-btn-2x:hover { background: #e68900; }
-    .upgrade-count { font-size: 12px; color: #ccc; }
+    .upgrade-btn {
+      background: rgba(76, 175, 80, 0.55);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.3);
+      padding: 5px 4px;
+      cursor: pointer;
+      border-radius: 8px;
+      font-size: 11px;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: background 0.2s;
+      width: 100%;
+    }
+    .upgrade-btn:hover { background: rgba(76,175,80,0.9); }
+    .upgrade-btn-2x {
+      background: rgba(255, 152, 0, 0.55);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.25);
+      padding: 2px 4px;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-top: 2px;
+      font-size: 10px;
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      transition: background 0.2s;
+      width: 100%;
+    }
+    .upgrade-btn-2x:hover { background: rgba(255,152,0,0.9); }
+    .upgrade-count { font-size: 11px; color: rgba(255,255,255,0.65); }
 
     /* --- Mobile controls --- */
     #joystickArea {
@@ -124,6 +149,63 @@
       box-shadow: 0 4px 16px rgba(255,60,60,0.35);
       user-select: none;
     }
+
+    /* ---- Upgrade panel glass ---- */
+    #upgradePanel {
+      background: rgba(255,255,255,0.07) !important;
+      backdrop-filter: blur(14px) !important;
+      -webkit-backdrop-filter: blur(14px) !important;
+      border: 1px solid rgba(255,255,255,0.22) !important;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.35) !important;
+    }
+
+    /* ---- Mobile layout ---- */
+    @media (max-width: 768px) {
+      #startMenu, #respawnMenu {
+        width: 90vw !important;
+        max-width: 400px !important;
+        padding: 18px !important;
+        max-height: 90vh !important;
+        overflow-y: auto !important;
+        box-sizing: border-box !important;
+      }
+      #startMenu input, #respawnMenu input {
+        width: calc(100% - 20px) !important;
+        box-sizing: border-box !important;
+        font-size: 14px !important;
+      }
+      /* Move upgrade panel to top so it doesn't clash with joystick */
+      #upgradePanel {
+        left: 10px !important;
+        bottom: auto !important;
+        top: 10px !important;
+        width: calc(100vw - 20px) !important;
+        max-width: 360px !important;
+        max-height: 44vh !important;
+        overflow-y: auto !important;
+        padding: 8px !important;
+        font-size: 11px !important;
+      }
+      #upgradePanel > div:first-child {
+        margin-bottom: 5px !important;
+        font-size: 12px !important;
+      }
+      /* Compact upgrade grid — 4 columns on mobile */
+      #upgradePanel > div:last-child {
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 4px !important;
+      }
+    }
+
+    @media (max-width: 400px) {
+      /* Very small phones: 4 cols still, even smaller text */
+      #upgradePanel > div:last-child {
+        grid-template-columns: repeat(4, 1fr) !important;
+        gap: 3px !important;
+      }
+      .upgrade-btn { font-size: 9px !important; padding: 3px 2px !important; }
+      .upgrade-btn-2x { font-size: 8px !important; }
+    }
   </style>
 </head>
 <body>
@@ -149,7 +231,7 @@
     <button id="respawnShopBtn" style="background: rgba(255, 152, 0, 0.8); margin-left: 10px;">🛍️ Shop</button>
   </div>
 
-  <div id="upgradePanel" style="display:none; position: absolute; left: 20px; bottom: 20px; background: rgba(0,0,0,0.8); border: 2px solid #fff; color: #fff; padding: 10px; width: 300px; font-family: sans-serif; z-index:100; border-radius: 10px;">
+  <div id="upgradePanel" style="display:none; position: absolute; left: 20px; bottom: 20px; color: #fff; padding: 10px; width: 300px; font-family: sans-serif; z-index:100; border-radius: 12px;">
     <div style="margin-bottom:8px;"><strong>Upgrade punten: <span id="upgradePoints">0</span></strong></div>
     <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px;">
       <div class="upgrade-item">

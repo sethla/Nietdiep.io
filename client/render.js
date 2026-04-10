@@ -26,8 +26,16 @@ export function drawMinimap(ctx, players, myId, worldSize) {
   const x = ctx.canvas.width - size - padding;
   const y = padding;
 
-  ctx.fillStyle = "rgba(0,0,0,0.6)";
-  ctx.fillRect(x, y, size, size);
+  // Glass background
+  ctx.save();
+  ctx.fillStyle = "rgba(255,255,255,0.05)";
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.rect(x, y, size, size);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 
   for (let id in players) {
     const p = players[id];
@@ -39,9 +47,6 @@ export function drawMinimap(ctx, players, myId, worldSize) {
     ctx.fillStyle = id === myId ? "#4caf50" : "#f44336";
     ctx.fill();
   }
-
-  ctx.strokeStyle = "#fff";
-  ctx.strokeRect(x, y, size, size);
 }
 
 export function drawMapBorder(ctx, worldSize, camera, canvas) {
