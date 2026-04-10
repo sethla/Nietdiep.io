@@ -12,6 +12,14 @@ function darkenColor(color, amount = 0.3) {
   return color;
 }
 
+function hexToRgb(color) {
+  if (!color || !color.startsWith('#') || color.length < 7) return '255,255,255';
+  const r = parseInt(color.slice(1,3), 16);
+  const g = parseInt(color.slice(3,5), 16);
+  const b = parseInt(color.slice(5,7), 16);
+  return `${r},${g},${b}`;
+}
+
 function roundRect(ctx, x, y, w, h, r) {
   if (w < 2*r) r = w/2;
   if (h < 2*r) r = h/2;
@@ -84,6 +92,15 @@ let queuePosition = 0;
 let lastUpdateTime = 0;
 let playerPrevPos = {}; // Track previous positions for interpolation
 let playerLastLevel = 0; // Track level for coin rewards
+
+// --- Fun extras state ---
+let screenShake = { intensity: 0 };       // screen shake on taking damage
+let killFeed = [];                         // [{name, color, time}] recent deaths
+let levelUpNotif = null;                   // {level, time} level-up notification
+let myKills = 0;                           // kill counter
+let myPrevHealth = null;                   // previous health for shake detection
+let prevAlivePlayers = {};                 // id -> bool, for kill feed
+let bulletTrailMap = {};                   // key -> {points, lastSeen} bullet trails
 
 function startFadeIn() {
   isFadingIn = true;
@@ -322,6 +339,9 @@ socket.onmessage = e => {
         if (!players[myId]) players[myId] = {};
         players[myId].coinage = (players[myId].coinage || 0) + coinsEarned;
 
+        // Level-up notification
+        levelUpNotif = { level: newLevel, time: Date.now() };
+
         // Refresh shop if it's open
         const shopPage = document.getElementById('shopPage');
         if (shopPage) {
@@ -376,13 +396,39 @@ socket.onmessage = e => {
     bullets = serverBullets;
     orbs = serverOrbs;
 
+    // Detect player deaths for kill feed
+    for (const id in serverPlayers) {
+      const sp = serverPlayers[id];
+      const wasAlive = prevAlivePlayers[id];
+      const isAlive = sp.alive;
+      if (wasAlive && !isAlive && id !== myId) {
+        killFeed.push({ name: sp.name || '?', color: sp.color || '#f44336', time: Date.now() });
+        if (killFeed.length > 5) killFeed.shift();
+        myKills++;
+      }
+      prevAlivePlayers[id] = isAlive;
+    }
+
+    // Screen shake on health drop
+    if (myId && serverPlayers[myId]) {
+      const newHealth = serverPlayers[myId].health;
+      if (myPrevHealth !== null && newHealth < myPrevHealth && serverPlayers[myId].alive) {
+        const drop = myPrevHealth - newHealth;
+        screenShake.intensity = Math.min(drop * 0.6, 14);
+      }
+      myPrevHealth = newHealth;
+    }
+
     if (myId && players[myId]) {
       const me = players[myId];
       if (!me.alive) {
-        respawnMenu.style.display = "block";
-        respawnMenu.classList.add("show");
-        showMap = true;
-        updateMapView();
+        // Only show respawn menu if the shop is not open
+        if (!document.getElementById('shopPage')) {
+          respawnMenu.style.display = "block";
+          respawnMenu.classList.add("show");
+          showMap = true;
+          updateMapView();
+        }
       } else {
         respawnMenu.style.display = "none";
         respawnMenu.classList.remove("show");
@@ -624,8 +670,16 @@ function draw() {
   drawGrid(ctx, camera, canvas);
   drawMapBorder(ctx, WORLD_SIZE, camera, canvas);
 
+  // Screen shake
+  const shakeX = screenShake.intensity > 0 ? (Math.random()-0.5)*screenShake.intensity*2 : 0;
+  const shakeY = screenShake.intensity > 0 ? (Math.random()-0.5)*screenShake.intensity*2 : 0;
+  if (screenShake.intensity > 0) {
+    screenShake.intensity *= 0.80;
+    if (screenShake.intensity < 0.1) screenShake.intensity = 0;
+  }
+
   ctx.save();
-  ctx.translate(-camera.x, -camera.y);
+  ctx.translate(-camera.x + shakeX, -camera.y + shakeY);
 
   for (let id in players) {
     const p = players[id];
@@ -636,14 +690,23 @@ function draw() {
 
     const radius = 20 + Math.sqrt(p.xp || 0) * 0.3;
 
-    // Draw barrel/pipe behind the body
+    // Drop shadow (grounded oval)
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.beginPath();
+    ctx.ellipse(pos.x + 3, pos.y + radius * 0.65, radius * 0.85, radius * 0.22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#000';
+    ctx.fill();
+    ctx.restore();
+
+    // Draw barrel/pipe behind the body — tinted with player color
     ctx.save();
     ctx.translate(pos.x, pos.y);
     ctx.rotate(p.angle || 0);
     const barrelLength = radius * 1.5;
     const barrelWidth = radius * 0.45;
-    ctx.fillStyle = '#7a7a7a';
-    ctx.strokeStyle = '#555555';
+    ctx.fillStyle = darkenColor(p.color || '#4caf50', 0.45);
+    ctx.strokeStyle = darkenColor(p.color || '#4caf50', 0.65);
     ctx.lineWidth = 2;
     ctx.fillRect(radius * 0.2, -barrelWidth / 2, barrelLength, barrelWidth);
     ctx.strokeRect(radius * 0.2, -barrelWidth / 2, barrelLength, barrelWidth);
@@ -667,6 +730,26 @@ function draw() {
     ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
     ctx.stroke();
 
+    // Low-health pulsing danger ring (< 30%)
+    const hpRatio = p.health / (p.maxHealth || 100);
+    if (hpRatio < 0.3) {
+      const pulse = Math.sin(Date.now() * 0.009) * 0.5 + 0.5;
+      ctx.save();
+      ctx.strokeStyle = `rgba(255,50,50,${0.4 + pulse * 0.6})`;
+      ctx.lineWidth = 2.5 + pulse * 3;
+      ctx.beginPath();
+      ctx.arc(pos.x, pos.y, radius + 5 + pulse * 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Crown above rank-1 player
+    if (leaderboard.length > 0 && p.name === leaderboard[0].name) {
+      ctx.font = `${Math.max(16, Math.round(radius * 0.65))}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('👑', pos.x, pos.y - radius - 26);
+    }
+
     ctx.fillStyle = "#fff";
     ctx.font = "16px sans-serif";
     ctx.textAlign = "center";
@@ -675,10 +758,19 @@ function draw() {
     ctx.strokeText(p.name, pos.x, pos.y - radius - 10);
     ctx.fillText(p.name, pos.x, pos.y - radius - 10);
 
-    ctx.fillStyle = "#555";
+    // Colored health bar (green → yellow → red)
+    const barHp = p.health / (p.maxHealth || 100);
+    const barColor = barHp > 0.6 ? '#44dd55' : barHp > 0.3 ? '#ffcc00' : '#ff4444';
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(pos.x - radius, pos.y - radius - 20, radius * 2, 5);
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(pos.x - radius, pos.y - radius - 20, radius * 2 * (p.health / p.maxHealth), 5);
+    ctx.fillStyle = barColor;
+    ctx.fillRect(pos.x - radius, pos.y - radius - 20, radius * 2 * barHp, 5);
+  }
+
+  // Clean up stale bullet trails
+  const nowTrails = Date.now();
+  for (const key in bulletTrailMap) {
+    if (nowTrails - bulletTrailMap[key].lastSeen > 300) delete bulletTrailMap[key];
   }
 
   bullets.forEach(b => {
@@ -691,11 +783,42 @@ function draw() {
     // Only render if within world bounds
     if (x >= 0 && x <= WORLD_SIZE && y >= 0 && y <= WORLD_SIZE) {
       const ownerColor = players[b.owner]?.color || '#ffffff';
+      const bKey = `${b.owner}|${b.startTime}`;
+
+      // Update trail points
+      if (!bulletTrailMap[bKey]) bulletTrailMap[bKey] = { points: [], lastSeen: now };
+      bulletTrailMap[bKey].lastSeen = now;
+      bulletTrailMap[bKey].points.push({ x, y });
+      if (bulletTrailMap[bKey].points.length > 7) bulletTrailMap[bKey].points.shift();
+
+      // Draw trail
+      const trail = bulletTrailMap[bKey].points;
+      for (let t = 1; t < trail.length; t++) {
+        const alpha = (t / trail.length) * 0.45;
+        ctx.strokeStyle = `rgba(${hexToRgb(ownerColor)},${alpha})`;
+        ctx.lineWidth = (t / trail.length) * 3.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(trail[t-1].x, trail[t-1].y);
+        ctx.lineTo(trail[t].x, trail[t].y);
+        ctx.stroke();
+      }
+
+      // Glow halo
+      const glow = ctx.createRadialGradient(x, y, 0, x, y, 11);
+      glow.addColorStop(0, `rgba(${hexToRgb(ownerColor)},0.55)`);
+      glow.addColorStop(1, `rgba(${hexToRgb(ownerColor)},0)`);
+      ctx.beginPath();
+      ctx.arc(x, y, 11, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
+
+      // Bullet body in owner color
       ctx.beginPath();
       ctx.arc(x, y, 5, 0, Math.PI * 2);
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = ownerColor;
       ctx.fill();
-      ctx.strokeStyle = darkenColor(ownerColor, 0.3);
+      ctx.strokeStyle = darkenColor(ownerColor, 0.35);
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }
@@ -704,7 +827,9 @@ function draw() {
   // Render orbs
   for (let id in orbs) {
     const orb = orbs[id];
-    const orbRadius = 30 * orb.size;
+    // Gentle pulsing size animation per orb (different phase per id)
+    const orbPulse = 1 + Math.sin(Date.now() * 0.0025 + parseFloat(id) * 0.7) * 0.06;
+    const orbRadius = 30 * orb.size * orbPulse;
     ctx.beginPath();
     ctx.arc(orb.x, orb.y, orbRadius, 0, Math.PI * 2);
     ctx.fillStyle = orb.color;
@@ -765,6 +890,62 @@ function draw() {
     ctx.fillText(`${idx + 1}. ${player.name} (Lvl ${player.level})`, lbX + lbW / 2, y);
   });
   ctx.restore();
+
+  // Kill feed (left side)
+  const nowKf = Date.now();
+  killFeed = killFeed.filter(k => nowKf - k.time < 4000);
+  ctx.save();
+  killFeed.forEach((k, i) => {
+    const age = nowKf - k.time;
+    const alpha = Math.max(0, 1 - age / 4000);
+    ctx.globalAlpha = alpha;
+    const kfY = canvas.height * 0.38 + i * 24;
+    ctx.font = 'bold 14px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.lineWidth = 3;
+    ctx.strokeText(`💀 ${k.name}`, 18, kfY);
+    ctx.fillStyle = k.color || '#f44336';
+    ctx.fillText(`💀 ${k.name}`, 18, kfY);
+  });
+  ctx.restore();
+
+  // Level-up notification
+  if (levelUpNotif) {
+    const age = Date.now() - levelUpNotif.time;
+    if (age < 2600) {
+      const alpha = age < 400 ? age / 400 : Math.max(0, 1 - (age - 400) / 2200);
+      const yOff = age < 400 ? 0 : -((age - 400) / 35);
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = 'bold 34px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+      ctx.lineWidth = 5;
+      ctx.strokeText(`⭐ LEVEL ${levelUpNotif.level}!`, canvas.width / 2, canvas.height / 2 - 80 + yOff);
+      ctx.fillStyle = '#ffd700';
+      ctx.fillText(`⭐ LEVEL ${levelUpNotif.level}!`, canvas.width / 2, canvas.height / 2 - 80 + yOff);
+      ctx.restore();
+    } else {
+      levelUpNotif = null;
+    }
+  }
+
+  // Kill counter HUD (top-left, below minimap area)
+  if (myKills > 0) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1;
+    roundRect(ctx, 14, 178, 106, 28, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = 'bold 13px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(`💀 ${myKills} kill${myKills !== 1 ? 's' : ''}`, 22, 198);
+    ctx.restore();
+  }
 
   const p = players[myId];
   if (p) {
