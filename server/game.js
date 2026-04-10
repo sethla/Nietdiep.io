@@ -286,7 +286,7 @@ class Game {
         const dy = p.y - y;
         const dist = Math.sqrt(dx * dx + dy * dy);
 
-        if (dist < p.size) {
+        if (dist < p.size + 10) {
           p.health -= b.damage;
           if (p.health <= 0) {
             if (b.owner && this.players[b.owner]) {
@@ -329,7 +329,7 @@ class Game {
         xpValue: xpValues[colorIndex] * size,
         maxHealth: hpValues[colorIndex],
         health: hpValues[colorIndex],
-        damage: 5 + colorIndex * 2
+        damage: 15 + colorIndex * 6
       };
     }
   }
@@ -355,7 +355,7 @@ class Game {
         }
         // Orb damage check - if player is close but not collecting
         if (dist < 20 + orbRadius * 2) {
-          if (!orb.lastDamageTime || Date.now() - orb.lastDamageTime > 1000) {
+          if (!orb.lastDamageTime || Date.now() - orb.lastDamageTime > 500) {
             p.health -= orb.damage;
             orb.lastDamageTime = Date.now();
             if (p.health <= 0) {

@@ -758,13 +758,17 @@ function draw() {
     ctx.strokeText(p.name, pos.x, pos.y - radius - 10);
     ctx.fillText(p.name, pos.x, pos.y - radius - 10);
 
-    // Colored health bar (green → yellow → red)
+    // Colored health bar (green → yellow → red) — rendered well above the name
     const barHp = p.health / (p.maxHealth || 100);
     const barColor = barHp > 0.6 ? '#44dd55' : barHp > 0.3 ? '#ffcc00' : '#ff4444';
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(pos.x - radius, pos.y - radius - 20, radius * 2, 5);
+    const hbY = pos.y - radius - 44;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(pos.x - radius, hbY, radius * 2, 6);
     ctx.fillStyle = barColor;
-    ctx.fillRect(pos.x - radius, pos.y - radius - 20, radius * 2 * barHp, 5);
+    ctx.fillRect(pos.x - radius, hbY, radius * 2 * barHp, 6);
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pos.x - radius, hbY, radius * 2, 6);
   }
 
   // Clean up stale bullet trails
@@ -789,7 +793,7 @@ function draw() {
       if (!bulletTrailMap[bKey]) bulletTrailMap[bKey] = { points: [], lastSeen: now };
       bulletTrailMap[bKey].lastSeen = now;
       bulletTrailMap[bKey].points.push({ x, y });
-      if (bulletTrailMap[bKey].points.length > 7) bulletTrailMap[bKey].points.shift();
+      if (bulletTrailMap[bKey].points.length > 20) bulletTrailMap[bKey].points.shift();
 
       // Draw trail
       const trail = bulletTrailMap[bKey].points;
@@ -825,37 +829,65 @@ function draw() {
   });
 
   // Render orbs
+  const orbNow = Date.now();
   for (let id in orbs) {
     const orb = orbs[id];
-    // Gentle pulsing size animation per orb (different phase per id)
-    const orbPulse = 1 + Math.sin(Date.now() * 0.0025 + parseFloat(id) * 0.7) * 0.06;
+    const orbPhase = parseFloat(id) * 0.7;
+    const orbPulse = 1 + Math.sin(orbNow * 0.0025 + orbPhase) * 0.07;
     const orbRadius = 30 * orb.size * orbPulse;
+
+    // Outer glow
+    const glowR = orbRadius * 1.7;
+    const orbGlow = ctx.createRadialGradient(orb.x, orb.y, orbRadius * 0.4, orb.x, orb.y, glowR);
+    orbGlow.addColorStop(0, orb.color + 'aa');
+    orbGlow.addColorStop(1, orb.color + '00');
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, glowR, 0, Math.PI * 2);
+    ctx.fillStyle = orbGlow;
+    ctx.fill();
+
+    // Body gradient (bright center → edge)
+    const orbGrad = ctx.createRadialGradient(orb.x - orbRadius * 0.3, orb.y - orbRadius * 0.3, 0, orb.x, orb.y, orbRadius);
+    orbGrad.addColorStop(0, '#ffffff');
+    orbGrad.addColorStop(0.35, orb.color);
+    orbGrad.addColorStop(1, darkenColor(orb.color, 0.35));
     ctx.beginPath();
     ctx.arc(orb.x, orb.y, orbRadius, 0, Math.PI * 2);
-    ctx.fillStyle = orb.color;
+    ctx.fillStyle = orbGrad;
     ctx.fill();
-    ctx.strokeStyle = "#fff";
-    ctx.lineWidth = 2;
+
+    // Specular shine
+    const shine = ctx.createRadialGradient(
+      orb.x - orbRadius * 0.32, orb.y - orbRadius * 0.32, 0,
+      orb.x - orbRadius * 0.32, orb.y - orbRadius * 0.32, orbRadius * 0.55
+    );
+    shine.addColorStop(0, 'rgba(255,255,255,0.55)');
+    shine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.beginPath();
+    ctx.arc(orb.x, orb.y, orbRadius, 0, Math.PI * 2);
+    ctx.fillStyle = shine;
+    ctx.fill();
+
+    // Ring
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    ctx.lineWidth = 1.5;
     ctx.stroke();
 
     // Draw health bar above orb
     if (orb.health && orb.maxHealth) {
       const barWidth = orbRadius * 2;
-      const barHeight = 4;
-      const healthPercent = orb.health / orb.maxHealth;
-
-      // Background bar
-      ctx.fillStyle = "#555";
-      ctx.fillRect(orb.x - barWidth / 2, orb.y - orbRadius - 10, barWidth, barHeight);
-
-      // Health bar
-      ctx.fillStyle = healthPercent > 0.5 ? "#00ff00" : healthPercent > 0.25 ? "#ffff00" : "#ff0000";
-      ctx.fillRect(orb.x - barWidth / 2, orb.y - orbRadius - 10, barWidth * healthPercent, barHeight);
-
-      // Border
-      ctx.strokeStyle = "#fff";
+      const barHeight = 5;
+      const hpPct = orb.health / orb.maxHealth;
+      const bx = orb.x - barWidth / 2;
+      const by = orb.y - orbRadius - 12;
+      const bColor = hpPct > 0.5 ? '#44dd55' : hpPct > 0.25 ? '#ffcc00' : '#ff4444';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(bx, by, barWidth, barHeight);
+      ctx.fillStyle = bColor;
+      ctx.fillRect(bx, by, barWidth * hpPct, barHeight);
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(orb.x - barWidth / 2, orb.y - orbRadius - 10, barWidth, barHeight);
+      ctx.strokeRect(bx, by, barWidth, barHeight);
     }
   }
 
@@ -985,7 +1017,7 @@ function draw() {
     ctx.textAlign = "center";
     ctx.shadowColor = "rgba(0,0,0,0.9)";
     ctx.shadowBlur = 4;
-    ctx.fillText(`Level ${p.level} | XP: ${p.xp}`, canvas.width / 2, barBottom + barHeight - 5);
+    ctx.fillText(`Level ${p.level} | XP: ${Math.round(p.xp)}`, canvas.width / 2, barBottom + barHeight - 5);
     ctx.shadowBlur = 0;
     ctx.restore();
   }
