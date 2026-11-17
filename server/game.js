@@ -4,7 +4,6 @@ const BaseLevelCost = 67;
 const maxOrbs = 250;
 const MaxLevel = 67;
 const MAX_PLAYERS = 15;
-const crypto = require('crypto');
 
 class Game {
   constructor() {
@@ -13,45 +12,13 @@ class Game {
     this.bullets = [];
     this.queue = []; // Array of {id, name, color, skin}
   }
-  
-  addPlayer(id, name, color, skin = 'default', customSkinUrl = null) {
-    const adminHash = crypto.createHash('sha256').update('adminpassword').digest('hex');
-    if (crypto.createHash('sha256').update(name).digest('hex') === adminHash)
-      this.players[id] = {
-      id,
-      name: "NILL",
-      color: color || "#4caf50",
-      skin: skin,
-      customSkinUrl: customSkinUrl || null,
-      x: Math.random() * WORLD_SIZE,
-      y: Math.random() * WORLD_SIZE,
-      angle: 5,
-      CanUpgrade: 91000000000000000000000000000000000000000000000000000000000000000000,
-      speed: 3,
-      health: 1,
-      maxHealth: 91000000000000000000000000000000000000000000000000000000000000000000,
-      alive: true,
-      xp: 0,
-      level: 66,
-      damage: 54,
-      power: 312,
-      bulletSpeed: 1200,
-      fireRate: 0,
-      bodyDamage: 5,
-      regenerationRate: 3,
-      size: 20,
-      tick: 0,
-      bodyCooldown: 0,
-      upgradeCounts: {}
 
-    };
-    else
-
-    this.players[id] = {
+  createBasePlayerState(id, name, color, skin = 'default', customSkinUrl = null) {
+    return {
       id,
-      name: name || "Player",
-      color: color || "#4caf50",
-      skin: skin,
+      name: typeof name === 'string' && name.trim() ? name.trim().slice(0, 25) : 'Player',
+      color: /^#[0-9A-Fa-f]{6}$/.test(color || '') ? color : '#4caf50',
+      skin,
       customSkinUrl: customSkinUrl || null,
       x: Math.random() * WORLD_SIZE,
       y: Math.random() * WORLD_SIZE,
@@ -74,8 +41,18 @@ class Game {
       bodyCooldown: 0,
       totalXp: 0,
       upgradeCounts: {}
-
     };
+  }
+
+  resetPlayerStats(player) {
+    const base = this.createBasePlayerState(player.id, player.name, player.color, player.skin, player.customSkinUrl);
+    Object.assign(player, base);
+    return player;
+  }
+  
+  addPlayer(id, name, color, skin = 'default', customSkinUrl = null) {
+    const player = this.createBasePlayerState(id, name, color, skin, customSkinUrl);
+    this.players[id] = player;
   }
 
   removePlayer(id) {
@@ -85,27 +62,12 @@ class Game {
   respawnPlayer(id) {
     const p = this.players[id];
     if (!p) return;
-      p.x = Math.random() * WORLD_SIZE;
-      p.y = Math.random() * WORLD_SIZE;
-      p.angle = 0;
-      p.CanUpgrade = 0;
-      p.speed = 4;
-      p.health = 100;
-      p.maxHealth = 100;
-      p.alive = true;
-      p.xp = 0;
-      p.level = 1;
-      p.damage = 5;
-      p.power = 20;
-      p.bulletSpeed = 3;
-      p.fireRate = 500;
-      p.bodyDamage = 10;
-      p.regenerationRate = 0.0001;
-      p.tick = 0;
-      p.bodyCooldown = 0;
-      p.totalXp = 0;
-      p.upgradeCounts = {};
 
+    this.resetPlayerStats(p);
+    p.x = Math.random() * WORLD_SIZE;
+    p.y = Math.random() * WORLD_SIZE;
+    p.angle = 0;
+    p.alive = true;
   }
 
   movePlayer(id, input, delta) {
@@ -114,14 +76,15 @@ class Game {
 
     if (input.angle !== undefined) p.angle = input.angle;
 
-    const vx = input.vx || 0;
-    const vy = input.vy || 0;
+    const vx = Number.isFinite(input.vx) ? input.vx : 0;
+    const vy = Number.isFinite(input.vy) ? input.vy : 0;
     if (vx !== 0 || vy !== 0) {
-      const len = Math.sqrt(vx * vx + vy * vy);
+      const len = Math.hypot(vx, vy) || 1;
       const nx = vx / len;
       const ny = vy / len;
-      p.x += nx * p.speed * (delta / 16);
-      p.y += ny * p.speed * (delta / 16);
+      const deltaScale = Number.isFinite(delta) && delta > 0 ? delta / 16 : 1;
+      p.x += nx * p.speed * deltaScale;
+      p.y += ny * p.speed * deltaScale;
       p.x = Math.max(0, Math.min(WORLD_SIZE, p.x));
       p.y = Math.max(0, Math.min(WORLD_SIZE, p.y));
     }
